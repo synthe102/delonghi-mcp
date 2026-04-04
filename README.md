@@ -207,19 +207,21 @@ uv run mcp dev src/delonghi_mcp/server.py
 
 | Tool | Description |
 |------|-------------|
-| `authenticate` | Login to the Ayla IoT cloud. Tries persisted refresh token, then SSO token, then email/password. Persists a refresh token on success for future sessions. |
 | `list_devices` | Discover connected coffee machines. Auto-selects the device if only one is found. |
+| `power_on` | Wake the machine from standby mode. |
 | `machine_status` | Quick status overview: machine state, grounds container level, descaling status, beverage counters. |
+| `list_beverages` | Show all beverages available on the machine (discovered from stored recipes). |
+| `brew_coffee` | Brew a beverage by name using the machine's stored recipe settings. Reads recipe parameters directly from the machine. |
 | `get_all_properties` | Read every property the machine exposes (full discovery dump). |
 | `get_property` | Read a single property by name. |
 | `set_property` | Write a value to any writable property (auto-parses int/float/string). |
-| `brew_coffee` | Brew a beverage by name using the machine's stored recipe settings. Reads recipe parameters directly from the machine. |
-| `list_beverages` | Show all beverages available on the machine (discovered from stored recipes). |
 
 ### Getting started workflow
 
-1. **`authenticate`** — Logs in with your configured credentials. After the first successful login, a refresh token is saved so this step becomes automatic.
-2. **`list_devices`** — Finds your coffee machine and auto-selects it.
+Authentication is automatic — the server logs in at startup using your configured credentials and persists a refresh token for future sessions.
+
+1. **`list_devices`** — Finds your coffee machine and auto-selects it.
+2. **`power_on`** — Wake the machine if it's in standby.
 3. **`machine_status`** — Check the machine is online and ready.
 4. **`list_beverages`** — See what drinks are available.
 5. **`brew_coffee`** — Brew something. Make sure the machine has water, beans, and a cup in place.
@@ -242,9 +244,9 @@ Claude ─── MCP (stdio) ──→ FastMCP Server
 
 ### Key modules
 
-- **`server.py`** — FastMCP tool definitions and the 3-step connection flow (handshake -> init -> command).
-- **`ayla_client.py`** — Async HTTP client for Ayla's REST API with cascading auth (refresh token -> SSO -> password) and automatic token persistence.
-- **`protocol.py`** — Binary packet construction: CRC-16/CCITT, brew/init/connect commands, recipe parsing, and Type-Value pair encoding for recipe parameters.
+- **`server.py`** — FastMCP tool definitions with auto-authentication at startup and the 3-step connection flow (handshake -> init -> command).
+- **`ayla_client.py`** — Async HTTP client for Ayla's REST API with cascading auth (refresh token -> SSO -> password), automatic token persistence, and on-demand re-authentication.
+- **`protocol.py`** — Binary packet construction: CRC-16/CCITT, brew/init/connect/power-on commands, recipe parsing, and Type-Value pair encoding for recipe parameters.
 - **`config.py`** — Pydantic-settings loading credentials from env vars prefixed `DELONGHI_`.
 
 ### Binary protocol

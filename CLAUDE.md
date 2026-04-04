@@ -31,11 +31,11 @@ This is an MCP server that controls a De'Longhi Eletta Explore coffee maker thro
 
 ### Key modules
 
-- **`protocol.py`** — Binary packet construction: CRC-16/CCITT, brew/init/connect commands, recipe ID mappings. All commands go through a single Ayla property (`app_data_request`) as base64-encoded binary. Recipe parameters use a **Type-Value (TV) pair** encoding; `stored_to_brew_params()` converts stored recipe format to brew command format automatically.
+- **`protocol.py`** — Binary packet construction: CRC-16/CCITT, brew/init/connect/power-on commands, recipe ID mappings. All commands go through a single Ayla property (`app_data_request`) as base64-encoded binary. Recipe parameters use a **Type-Value (TV) pair** encoding; `stored_to_brew_params()` converts stored recipe format to brew command format automatically.
 
-- **`ayla_client.py`** — Async HTTP client for Ayla's REST API. Handles three auth methods (persisted refresh token -> SSO token -> email/password) with automatic token refresh. Persists the refresh token to `.ayla_token.json` so the SSO token is only needed once.
+- **`ayla_client.py`** — Async HTTP client for Ayla's REST API. Handles three auth methods (persisted refresh token -> SSO token -> email/password) with automatic token refresh. Persists the refresh token to `.ayla_token.json` so the SSO token is only needed once. Auto-authenticates on demand in `_ensure_auth()` — no explicit authenticate call needed.
 
-- **`server.py`** — FastMCP tool definitions. Before brewing, must run the 3-step connection flow: handshake (`app_device_connected`) -> init command (0xE8F0) -> brew command (0x83F0). Skipping the handshake causes the machine to acknowledge but not execute commands.
+- **`server.py`** — FastMCP tool definitions. Auto-authenticates at startup in `lifespan()`. Before brewing, must run the 3-step connection flow: handshake (`app_device_connected`) -> init command (0xE8F0) -> brew command (0x83F0). Skipping the handshake causes the machine to acknowledge but not execute commands.
 
 - **`config.py`** — Pydantic-settings loading credentials from env vars prefixed `DELONGHI_`.
 
@@ -47,6 +47,7 @@ Packet: `[0x0D] [len] [payload] [CRC16] [4B timestamp BE] [4B device suffix BE]`
 - CRC-16/CCITT (init 0x1D0F) over `[0x0D, len, ...payload]`
 - Device suffix: constant 4 bytes extracted from `app_device_connected` property
 - Stored recipe params (d059_rec_1_* properties) use **TV pairs** with different ordering than brew commands — `stored_to_brew_params()` handles the conversion (drop type 0x19, add type 0x27, sort ascending, append 0x06). Types 0x01/0x09/0x0F have 2-byte values (quantities in ml), others have 1-byte values.
+- Known command opcodes: `0x83F0` (brew), `0xE8F0` (init), `0x840F` (power on), `0x950F` (read machine setting — sent by Coffee Link app when opening settings, not a write).
 
 ### Testing
 
