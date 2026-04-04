@@ -167,9 +167,13 @@ class AylaClient:
 
     async def _ensure_auth(self) -> None:
         if not self._auth:
-            raise NotAuthenticatedError(
-                "Not authenticated. Call the 'authenticate' tool first."
-            )
+            if self._settings.is_configured() or self.has_saved_credentials():
+                await self.authenticate()
+            else:
+                raise NotAuthenticatedError(
+                    "Not authenticated and no credentials configured."
+                )
+        assert self._auth is not None
         if self._auth.expires_at - datetime.now(UTC) < timedelta(seconds=60):
             await self.refresh_token()
 

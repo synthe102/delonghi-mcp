@@ -11,7 +11,7 @@ from mcp.server.fastmcp import Context, FastMCP
 
 from delonghi_mcp.ayla_client import AylaClient
 from delonghi_mcp.config import AylaSettings
-from delonghi_mcp.exceptions import DeLonghiMCPError, NotAuthenticatedError
+from delonghi_mcp.exceptions import DeLonghiMCPError
 from delonghi_mcp.protocol import (
     RECIPE_IDS,
     RECIPE_NAMES,
@@ -39,6 +39,11 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
     settings = AylaSettings()
     async with httpx.AsyncClient(timeout=30.0) as http_client:
         client = AylaClient(http_client, settings)
+        if settings.is_configured() or client.has_saved_credentials():
+            try:
+                await client.authenticate()
+            except Exception:
+                pass  # Tools will re-attempt via _ensure_auth
         yield AppContext(client=client, settings=settings)
 
 
@@ -99,43 +104,6 @@ def _truncate(value: object, max_len: int = 80) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Tool: authenticate
-# ---------------------------------------------------------------------------
-
-
-@mcp.tool()
-async def authenticate(ctx: Context) -> str:
-    """Login to the De'Longhi / Ayla IoT cloud.
-
-    Uses SSO token auth (DELONGHI_AYLA_SSO_TOKEN) if set, otherwise falls
-    back to email/password (DELONGHI_AYLA_EMAIL + DELONGHI_AYLA_PASSWORD).
-    Both methods require DELONGHI_AYLA_APP_ID and DELONGHI_AYLA_APP_SECRET.
-    """
-    app = _get_ctx(ctx)
-
-    if not app.settings.is_configured() and not app.client.has_saved_credentials():
-        return (
-            "ERROR: Missing credentials. Set these environment variables:\n"
-            "  DELONGHI_AYLA_APP_ID\n"
-            "  DELONGHI_AYLA_APP_SECRET\n"
-            "  DELONGHI_AYLA_SSO_TOKEN  (preferred — Gigya JWT from Coffee Link app)\n"
-            "  — or —\n"
-            "  DELONGHI_AYLA_EMAIL + DELONGHI_AYLA_PASSWORD\n\n"
-            "See docs/reverse-engineering-guide.md for how to obtain these values."
-        )
-
-    try:
-        auth = await app.client.authenticate()
-        return (
-            f"Authenticated successfully.\n"
-            f"Token expires at: {auth.expires_at.isoformat()}\n"
-            f"Role: {auth.role or 'N/A'}"
-        )
-    except DeLonghiMCPError as e:
-        return f"ERROR: {e}"
-
-
-# ---------------------------------------------------------------------------
 # Tool: list_devices
 # ---------------------------------------------------------------------------
 
@@ -150,10 +118,8 @@ async def list_devices(ctx: Context) -> str:
     app = _get_ctx(ctx)
     try:
         devices = await app.client.list_devices()
-    except NotAuthenticatedError as e:
+    except DeLonghiMCPError as e:
         return f"ERROR: {e}"
-    except Exception as e:
-        return f"ERROR listing devices: {e}"
 
     if not devices:
         return "No devices found on this account."

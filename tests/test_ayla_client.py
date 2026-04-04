@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import pathlib
+
+import httpx
 import pytest
 import respx
 from httpx import Response
 
 from delonghi_mcp.ayla_client import AylaClient
+from delonghi_mcp.config import AylaSettings
 from delonghi_mcp.exceptions import (
     AuthenticationError,
     DeviceNotFoundError,
@@ -59,9 +63,14 @@ async def test_authenticate_invalid_app_id(ayla_client: AylaClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_not_authenticated_raises(ayla_client: AylaClient) -> None:
+async def test_not_authenticated_raises(tmp_path: pathlib.Path) -> None:
+    """A client with no credentials raises NotAuthenticatedError."""
+    settings = AylaSettings(ayla_app_id="", ayla_app_secret="")
+    client = AylaClient(
+        httpx.AsyncClient(), settings, token_file=tmp_path / ".ayla_token.json"
+    )
     with pytest.raises(NotAuthenticatedError):
-        await ayla_client.list_devices()
+        await client.list_devices()
 
 
 @pytest.mark.asyncio
