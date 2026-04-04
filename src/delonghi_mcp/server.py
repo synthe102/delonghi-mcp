@@ -284,43 +284,6 @@ async def get_property(ctx: Context, property_name: str, dsn: str | None = None)
 
 
 # ---------------------------------------------------------------------------
-# Tool: set_property
-# ---------------------------------------------------------------------------
-
-
-@mcp.tool()
-async def set_property(
-    ctx: Context,
-    property_name: str,
-    value: str,
-    dsn: str | None = None,
-) -> str:
-    """Set a device property to a specific value.
-
-    The value is auto-parsed: integers and floats are detected automatically,
-    otherwise it is sent as a string.
-    """
-    app = _get_ctx(ctx)
-    dsn = dsn or app.selected_dsn
-
-    parsed_value: int | float | str = value
-    try:
-        parsed_value = int(value)
-    except ValueError:
-        try:
-            parsed_value = float(value)
-        except ValueError:
-            pass
-
-    try:
-        result = await app.client.set_property(property_name, parsed_value, dsn)
-    except DeLonghiMCPError as e:
-        return f"ERROR: {e}"
-
-    return f"Set {property_name} = {parsed_value!r}\nResponse: {result}"
-
-
-# ---------------------------------------------------------------------------
 # Tool: brew_coffee
 # ---------------------------------------------------------------------------
 

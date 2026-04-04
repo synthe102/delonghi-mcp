@@ -214,7 +214,6 @@ uv run mcp dev src/delonghi_mcp/server.py
 | `brew_coffee` | Brew a beverage by name using the machine's stored recipe settings. Reads recipe parameters directly from the machine. |
 | `get_all_properties` | Read every property the machine exposes (full discovery dump). |
 | `get_property` | Read a single property by name. |
-| `set_property` | Write a value to any writable property (auto-parses int/float/string). |
 
 ### Getting started workflow
 
@@ -228,7 +227,6 @@ Authentication is automatic — the server logs in at startup using your configu
 
 For exploration and development:
 - **`get_all_properties`** — Dump every property to understand the machine's full API surface.
-- **`set_property`** — Experiment with writable properties you've identified.
 
 ## Architecture
 
