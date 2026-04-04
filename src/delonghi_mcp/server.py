@@ -327,6 +327,18 @@ async def brew_coffee(
     app = _get_ctx(ctx)
     dsn = dsn or app.selected_dsn
 
+    try:
+        status_prop = await app.client.get_property("app_device_status", dsn)
+        status = status_prop.value
+    except DeLonghiMCPError:
+        status = None
+
+    if status != "RUN":
+        return (
+            f"ERROR: Machine is not ready (status: {status or 'unknown'}). "
+            "Please power on the machine and wait for it to reach RUN state."
+        )
+
     recipe_id = _resolve_recipe_id(beverage)
     if recipe_id is None:
         available = "\n".join(f"  - {name}" for name in sorted(RECIPE_IDS.keys()))
