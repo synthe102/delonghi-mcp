@@ -213,7 +213,6 @@ uv run mcp dev src/delonghi_mcp/server.py
 | `list_beverages` | Show all beverages available on the machine (discovered from stored recipes). |
 | `brew_coffee` | Brew a beverage by name using the machine's stored recipe settings. Reads recipe parameters directly from the machine. |
 | `get_all_properties` | Read every property the machine exposes (full discovery dump). |
-| `get_property` | Read a single property by name. |
 
 ### Getting started workflow
 

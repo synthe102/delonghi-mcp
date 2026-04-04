@@ -258,32 +258,6 @@ async def get_all_properties(ctx: Context, dsn: str | None = None) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Tool: get_property
-# ---------------------------------------------------------------------------
-
-
-@mcp.tool()
-async def get_property(ctx: Context, property_name: str, dsn: str | None = None) -> str:
-    """Read a specific property value from the coffee machine."""
-    app = _get_ctx(ctx)
-    dsn = dsn or app.selected_dsn
-
-    try:
-        prop = await app.client.get_property(property_name, dsn)
-    except DeLonghiMCPError as e:
-        return f"ERROR: {e}"
-
-    return (
-        f"Property: {prop.name}\n"
-        f"Value: {prop.value!r}\n"
-        f"Type: {prop.type}\n"
-        f"Direction: {prop.direction}\n"
-        f"Read-only: {prop.read_only}\n"
-        f"Updated at: {prop.updated_at or 'N/A'}"
-    )
-
-
-# ---------------------------------------------------------------------------
 # Tool: brew_coffee
 # ---------------------------------------------------------------------------
 
