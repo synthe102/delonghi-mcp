@@ -15,6 +15,3 @@ wheels/
 
 # API captures / debug dumps
 dumps/
-
-# uv lock
-uv.lock
