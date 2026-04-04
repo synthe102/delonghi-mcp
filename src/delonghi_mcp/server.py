@@ -206,7 +206,18 @@ async def machine_status(ctx: Context, dsn: str | None = None) -> str:
     lines = ["Machine Status:\n"]
     for prop_name, label in STATUS_PROPERTIES.items():
         prop = props_by_name.get(prop_name)
-        lines.append(f"  {label}: {prop.value if prop else '(unavailable)'}")
+        if prop is None:
+            lines.append(f"  {label}: (unavailable)")
+        elif prop_name == "d512_percentage_to_deca" and isinstance(prop.value, int):
+            if prop.value > 100:
+                lines.append(
+                    f"  {label}: {prop.value}% — DESCALING OVERDUE "
+                    f"({prop.value - 100}% past threshold)"
+                )
+            else:
+                lines.append(f"  {label}: {prop.value}%")
+        else:
+            lines.append(f"  {label}: {prop.value}")
 
     return "\n".join(lines)
 
