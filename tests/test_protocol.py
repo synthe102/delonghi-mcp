@@ -9,7 +9,6 @@ import pytest
 
 from delonghi_mcp.protocol import (
     CAPTURED_BREW_PARAMS,
-    QUANTITY_TYPES,
     build_brew_command,
     crc16_ccitt,
     extract_device_suffix,
@@ -36,18 +35,14 @@ def test_crc16_ccitt_regular_recipe() -> None:
 
 
 def test_parse_stored_recipe_espresso() -> None:
-    profile_id, recipe_id, params = parse_stored_recipe(
-        "0BKm8AEBCAABACgbAQIEGQFnbg=="
-    )
+    profile_id, recipe_id, params = parse_stored_recipe("0BKm8AEBCAABACgbAQIEGQFnbg==")
     assert profile_id == 0x01
     assert recipe_id == 0x01  # espresso
     assert len(params) > 0
 
 
 def test_parse_stored_recipe_regular() -> None:
-    profile_id, recipe_id, params = parse_stored_recipe(
-        "0BCm8AECGQEbAQEAtAICL7A="
-    )
+    profile_id, recipe_id, params = parse_stored_recipe("0BCm8AECGQEbAQEAtAICL7A=")
     assert profile_id == 0x01
     assert recipe_id == 0x02  # regular
 
@@ -60,7 +55,9 @@ def test_extract_device_suffix() -> None:
 
 def test_build_brew_command_crc_valid() -> None:
     """Build a brew command and verify the CRC is correct."""
-    recipe_params = bytes([0x08, 0x00, 0x01, 0x00, 0x28, 0x1B, 0x01, 0x02, 0x04, 0x19, 0x01])
+    recipe_params = bytes(
+        [0x08, 0x00, 0x01, 0x00, 0x28, 0x1B, 0x01, 0x02, 0x04, 0x19, 0x01]
+    )
     suffix = bytes([0x00, 0x19, 0xA7, 0xA9])
     timestamp = 1775315296
 
@@ -95,7 +92,9 @@ def test_build_brew_command_reproduces_captured_espresso() -> None:
 
     # The recipe params in the brew command (bytes [6:18] of protocol):
     # 01 00 28 02 04 08 00 1B 01 27 01 06
-    recipe_params = bytes([0x01, 0x00, 0x28, 0x02, 0x04, 0x08, 0x00, 0x1B, 0x01, 0x27, 0x01, 0x06])
+    recipe_params = bytes(
+        [0x01, 0x00, 0x28, 0x02, 0x04, 0x08, 0x00, 0x1B, 0x01, 0x27, 0x01, 0x06]
+    )
     suffix = bytes([0x00, 0x19, 0xA7, 0xA9])
     timestamp = 1775315296  # 2026-04-04 15:08:16 UTC
 

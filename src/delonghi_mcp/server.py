@@ -63,7 +63,9 @@ async def _connect_to_machine(app: AppContext) -> None:
     """Establish connection with the machine (required before sending commands)."""
     suffix = await _ensure_device_suffix(app)
     dsn = app.selected_dsn
-    await app.client.set_property("app_device_connected", build_connect_command(suffix), dsn)
+    await app.client.set_property(
+        "app_device_connected", build_connect_command(suffix), dsn
+    )
     await app.client.set_property("app_data_request", build_init_command(suffix), dsn)
 
 
@@ -258,9 +260,7 @@ async def get_all_properties(ctx: Context, dsn: str | None = None) -> str:
 
 
 @mcp.tool()
-async def get_property(
-    ctx: Context, property_name: str, dsn: str | None = None
-) -> str:
+async def get_property(ctx: Context, property_name: str, dsn: str | None = None) -> str:
     """Read a specific property value from the coffee machine."""
     app = _get_ctx(ctx)
     dsn = dsn or app.selected_dsn
@@ -377,7 +377,9 @@ async def brew_coffee(
         suffix = await _ensure_device_suffix(app)
         command = build_brew_command(recipe_id, brew_params[recipe_id], suffix)
         result = await app.client.set_property("app_data_request", command, dsn)
-        return f"Brewing {beverage_name}!\nCommand sent successfully.\nResponse: {result}"
+        return (
+            f"Brewing {beverage_name}!\nCommand sent successfully.\nResponse: {result}"
+        )
     except DeLonghiMCPError as e:
         return f"ERROR brewing {beverage_name}: {e}"
 

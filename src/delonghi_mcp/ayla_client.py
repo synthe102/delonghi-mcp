@@ -63,7 +63,9 @@ class AylaClient:
         except (OSError, json.JSONDecodeError, KeyError):
             return None
 
-    def _parse_auth_response(self, data: dict[str, Any], fallback_role: str = "") -> AuthState:
+    def _parse_auth_response(
+        self, data: dict[str, Any], fallback_role: str = ""
+    ) -> AuthState:
         self._auth = AuthState(
             access_token=data["access_token"],
             refresh_token=data["refresh_token"],
@@ -171,9 +173,7 @@ class AylaClient:
         if self._auth.expires_at - datetime.now(UTC) < timedelta(seconds=60):
             await self.refresh_token()
 
-    async def _request(
-        self, method: str, path: str, **kwargs: Any
-    ) -> httpx.Response:
+    async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         await self._ensure_auth()
         assert self._auth is not None
 
@@ -220,13 +220,10 @@ class AylaClient:
         if len(self._devices) == 1:
             return self._devices[0].dsn
         if not self._devices:
-            raise DeviceNotFoundError(
-                "No devices cached. Call 'list_devices' first."
-            )
+            raise DeviceNotFoundError("No devices cached. Call 'list_devices' first.")
         raise DeviceNotFoundError(
             f"Multiple devices found ({len(self._devices)}). "
-            "Specify a DSN. Available: "
-            + ", ".join(d.dsn for d in self._devices)
+            "Specify a DSN. Available: " + ", ".join(d.dsn for d in self._devices)
         )
 
     @staticmethod
@@ -248,8 +245,7 @@ class AylaClient:
         resp = await self._request("GET", f"/apiv1/dsns/{dsn}/properties.json")
         resp.raise_for_status()
         return [
-            self._parse_property(item.get("property", item))
-            for item in resp.json()
+            self._parse_property(item.get("property", item)) for item in resp.json()
         ]
 
     async def get_property(

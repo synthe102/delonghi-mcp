@@ -43,7 +43,12 @@ def _build_packet(
     length = len(payload) + 3
     crc_input = bytes([0x0D, length]) + payload
     crc = crc16_ccitt(crc_input)
-    packet = crc_input + struct.pack(">H", crc) + struct.pack(">I", timestamp) + device_suffix
+    packet = (
+        crc_input
+        + struct.pack(">H", crc)
+        + struct.pack(">I", timestamp)
+        + device_suffix
+    )
     return base64.b64encode(packet).decode("ascii")
 
 
@@ -58,9 +63,7 @@ def build_brew_command(
     return _build_packet(payload, device_suffix, timestamp)
 
 
-def build_init_command(
-    device_suffix: bytes, timestamp: int | None = None
-) -> str:
+def build_init_command(device_suffix: bytes, timestamp: int | None = None) -> str:
     """Build the initialization command (0xE8F0) sent before brew commands."""
     payload = bytes([0xE8, 0xF0, 0x00, 0xED, 0x7C])
     return _build_packet(payload, device_suffix, timestamp)
@@ -190,8 +193,12 @@ RECIPE_IDS: dict[str, int] = {v.lower(): k for k, v in RECIPE_NAMES.items()}
 # Captured brew command params (from Coffee Link app MITM).
 # The stored recipe params use a different byte ordering and cannot be sent directly.
 CAPTURED_BREW_PARAMS: dict[int, bytes] = {
-    0x01: bytes([0x01, 0x00, 0x28, 0x02, 0x04, 0x08, 0x00, 0x1B, 0x01, 0x27, 0x01, 0x06]),  # Espresso
-    0x02: bytes([0x01, 0x00, 0xB4, 0x02, 0x02, 0x1B, 0x01, 0x27, 0x01, 0x06]),  # Regular Coffee
+    0x01: bytes(
+        [0x01, 0x00, 0x28, 0x02, 0x04, 0x08, 0x00, 0x1B, 0x01, 0x27, 0x01, 0x06]
+    ),  # Espresso
+    0x02: bytes(
+        [0x01, 0x00, 0xB4, 0x02, 0x02, 0x1B, 0x01, 0x27, 0x01, 0x06]
+    ),  # Regular Coffee
 }
 
 STATUS_PROPERTIES: dict[str, str] = {

@@ -7,6 +7,8 @@ from pathlib import Path
 import httpx
 import pytest
 
+from pydantic import SecretStr
+
 from delonghi_mcp.ayla_client import AylaClient
 from delonghi_mcp.config import AylaSettings
 
@@ -15,7 +17,7 @@ from delonghi_mcp.config import AylaSettings
 def ayla_settings() -> AylaSettings:
     return AylaSettings(
         ayla_email="test@example.com",
-        ayla_password="testpass",
+        ayla_password=SecretStr("testpass"),
         ayla_app_id="test-app-id",
         ayla_app_secret="test-app-secret",
         ayla_auth_base_url="https://auth.test.example.com",
@@ -29,9 +31,13 @@ def http_client() -> httpx.AsyncClient:
 
 
 @pytest.fixture
-def ayla_client(http_client: httpx.AsyncClient, ayla_settings: AylaSettings, tmp_path: Path) -> AylaClient:
+def ayla_client(
+    http_client: httpx.AsyncClient, ayla_settings: AylaSettings, tmp_path: Path
+) -> AylaClient:
     # Use a non-existent token file so tests don't pick up real tokens
-    return AylaClient(http_client, ayla_settings, token_file=tmp_path / ".ayla_token.json")
+    return AylaClient(
+        http_client, ayla_settings, token_file=tmp_path / ".ayla_token.json"
+    )
 
 
 @pytest.fixture

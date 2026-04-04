@@ -215,6 +215,7 @@ async def test_set_property(ayla_client: AylaClient) -> None:
     # Verify request body
     request = route.calls[0].request
     import json
+
     body = json.loads(request.content)
     assert body == {"datapoint": {"value": 1}}
 
@@ -230,15 +231,24 @@ async def test_resolve_dsn_auto_select(ayla_client: AylaClient) -> None:
     respx.get("https://ads.test.example.com/apiv1/devices.json").mock(
         return_value=Response(
             200,
-            json=[{"device": {"dsn": "DSN001", "id": 1, "product_name": "X", "model": "Y"}}],
+            json=[
+                {
+                    "device": {
+                        "dsn": "DSN001",
+                        "id": 1,
+                        "product_name": "X",
+                        "model": "Y",
+                    }
+                }
+            ],
         )
     )
     await ayla_client.list_devices()
 
     # Should auto-resolve to the single device
-    respx.get(
-        "https://ads.test.example.com/apiv1/dsns/DSN001/properties.json"
-    ).mock(return_value=Response(200, json=[]))
+    respx.get("https://ads.test.example.com/apiv1/dsns/DSN001/properties.json").mock(
+        return_value=Response(200, json=[])
+    )
 
     props = await ayla_client.get_device_properties()
     assert props == []
@@ -246,7 +256,9 @@ async def test_resolve_dsn_auto_select(ayla_client: AylaClient) -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_resolve_dsn_multiple_devices_requires_dsn(ayla_client: AylaClient) -> None:
+async def test_resolve_dsn_multiple_devices_requires_dsn(
+    ayla_client: AylaClient,
+) -> None:
     respx.post("https://auth.test.example.com/users/sign_in.json").mock(
         return_value=Response(200, json={"access_token": "tok", "refresh_token": "ref"})
     )
@@ -256,8 +268,22 @@ async def test_resolve_dsn_multiple_devices_requires_dsn(ayla_client: AylaClient
         return_value=Response(
             200,
             json=[
-                {"device": {"dsn": "DSN001", "id": 1, "product_name": "X", "model": "Y"}},
-                {"device": {"dsn": "DSN002", "id": 2, "product_name": "Z", "model": "W"}},
+                {
+                    "device": {
+                        "dsn": "DSN001",
+                        "id": 1,
+                        "product_name": "X",
+                        "model": "Y",
+                    }
+                },
+                {
+                    "device": {
+                        "dsn": "DSN002",
+                        "id": 2,
+                        "product_name": "Z",
+                        "model": "W",
+                    }
+                },
             ],
         )
     )
@@ -272,7 +298,9 @@ async def test_resolve_dsn_multiple_devices_requires_dsn(ayla_client: AylaClient
 async def test_token_refresh_on_401(ayla_client: AylaClient) -> None:
     """Test that a 401 response triggers token refresh and retry."""
     respx.post("https://auth.test.example.com/users/sign_in.json").mock(
-        return_value=Response(200, json={"access_token": "tok_old", "refresh_token": "ref"})
+        return_value=Response(
+            200, json={"access_token": "tok_old", "refresh_token": "ref"}
+        )
     )
     await ayla_client.authenticate()
 
