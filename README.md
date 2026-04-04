@@ -1,6 +1,6 @@
 # De'Longhi Eletta Explore MCP Server
 
-An MCP (Model Context Protocol) server for controlling a De'Longhi Eletta Explore coffee maker through Claude. Communicates with the machine via the Ayla Networks IoT cloud — the same platform used by the De'Longhi Coffee Link app.
+An [MCP](https://modelcontextprotocol.io/) server for controlling a De'Longhi Eletta Explore coffee maker through Claude. Communicates with the machine via the Ayla Networks IoT cloud — the same platform used by the De'Longhi Coffee Link app.
 
 ## Setup
 
@@ -33,36 +33,50 @@ nix run        # Run the MCP server directly
 
 ### Configure
 
-1. Copy the example env file and fill in your credentials:
+Copy the example env file and fill in your credentials:
 
 ```bash
 cp .env.example .env
 ```
 
-2. Edit `.env` with your De'Longhi Coffee Link email/password and the extracted `app_id`/`app_secret`.
+At minimum you need the Ayla app credentials in `.env`:
 
-3. Optionally customize beverage presets in `config/beverages.toml` and property mappings in `config/properties.toml` after discovering the actual property names.
+```env
+DELONGHI_AYLA_APP_ID=your-app-id
+DELONGHI_AYLA_APP_SECRET=your-app-secret
+```
+
+These are extracted from the Coffee Link app — see [docs/reverse-engineering-guide.md](docs/reverse-engineering-guide.md).
+
+#### Authentication
+
+The server supports three authentication methods, tried in this order:
+
+1. **Persisted refresh token** (automatic) — After a successful login, the server saves a refresh token to `.ayla_token.json`. On subsequent launches, it uses this token automatically. No manual intervention needed until the token expires.
+
+2. **SSO token** — A Gigya JWT captured from the Coffee Link app's `token_sign_in` request via MITM proxy. Set `DELONGHI_AYLA_SSO_TOKEN` in `.env`. This is the preferred method for initial setup since it doesn't require your De'Longhi account password.
+
+3. **Email/password** — Your Coffee Link account credentials. Set `DELONGHI_AYLA_EMAIL` and `DELONGHI_AYLA_PASSWORD` in `.env`.
+
+In practice: provide `app_id` + `app_secret` and one of SSO token or email/password for the first login. After that, the persisted refresh token handles re-authentication automatically.
+
+#### Environment variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DELONGHI_AYLA_APP_ID` | Yes | Ayla application ID (extracted from Coffee Link app) |
+| `DELONGHI_AYLA_APP_SECRET` | Yes | Ayla application secret |
+| `DELONGHI_AYLA_SSO_TOKEN` | No | Gigya JWT for SSO auth (preferred for initial login) |
+| `DELONGHI_AYLA_EMAIL` | No | Coffee Link account email (alternative auth) |
+| `DELONGHI_AYLA_PASSWORD` | No | Coffee Link account password (alternative auth) |
+| `DELONGHI_AYLA_AUTH_BASE_URL` | No | Auth endpoint (default: EU — `https://user-field-eu.aylanetworks.com`) |
+| `DELONGHI_AYLA_ADS_BASE_URL` | No | Device API endpoint (default: EU — `https://ads-eu.aylanetworks.com`) |
 
 ## Usage
 
 ### With Claude Code
 
-Add to your Claude Code settings (`~/.claude/settings.json`):
-
-```json
-{
-  "mcpServers": {
-    "delonghi": {
-      "command": "uv",
-      "args": ["--directory", "/path/to/delonghi-mcp", "run", "delonghi-mcp"]
-    }
-  }
-}
-```
-
-### With Claude Desktop
-
-Add to your Claude Desktop config:
+Add to your Claude Code MCP settings (`~/.claude.json` or project `.mcp.json`):
 
 ```json
 {
@@ -71,8 +85,27 @@ Add to your Claude Desktop config:
       "command": "uv",
       "args": ["--directory", "/path/to/delonghi-mcp", "run", "delonghi-mcp"],
       "env": {
-        "DELONGHI_AYLA_EMAIL": "your-email@example.com",
-        "DELONGHI_AYLA_PASSWORD": "your-password",
+        "DELONGHI_AYLA_APP_ID": "your-app-id",
+        "DELONGHI_AYLA_APP_SECRET": "your-app-secret"
+      }
+    }
+  }
+}
+```
+
+Other credentials (SSO token or email/password) can go in the project's `.env` file instead of the MCP config. Once authenticated, the server persists a refresh token so only `app_id` and `app_secret` are needed in the MCP config long-term.
+
+### With Claude Desktop
+
+Add to your Claude Desktop config (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "delonghi": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/delonghi-mcp", "run", "delonghi-mcp"],
+      "env": {
         "DELONGHI_AYLA_APP_ID": "your-app-id",
         "DELONGHI_AYLA_APP_SECRET": "your-app-secret"
       }
@@ -91,24 +124,26 @@ uv run mcp dev src/delonghi_mcp/server.py
 
 | Tool | Description |
 |------|-------------|
-| `authenticate` | Login to the Ayla IoT cloud |
-| `list_devices` | Discover connected coffee machines |
-| `get_device_status` | Read all properties from the machine (discovery tool) |
-| `get_property` | Read a specific property value |
-| `set_property` | Write any property (generic/experimental) |
-| `brew_coffee` | Brew a beverage from presets |
-| `power_on` | Turn on the machine |
-| `power_off` | Turn off / standby |
-| `list_beverages` | Show configured beverage types |
+| `authenticate` | Login to the Ayla IoT cloud. Tries persisted refresh token, then SSO token, then email/password. Persists a refresh token on success for future sessions. |
+| `list_devices` | Discover connected coffee machines. Auto-selects the device if only one is found. |
+| `machine_status` | Quick status overview: machine state, grounds container level, descaling status, beverage counters. |
+| `get_all_properties` | Read every property the machine exposes (full discovery dump). |
+| `get_property` | Read a single property by name. |
+| `set_property` | Write a value to any writable property (auto-parses int/float/string). |
+| `brew_coffee` | Brew a beverage by name using the machine's stored recipe settings. Reads recipe parameters directly from the machine. |
+| `list_beverages` | Show all beverages available on the machine (discovered from stored recipes). |
 
-### Getting Started Workflow
+### Getting started workflow
 
-1. **Authenticate**: `authenticate` — logs in with your credentials
-2. **Discover devices**: `list_devices` — finds your coffee machine
-3. **Explore properties**: `get_device_status` — shows all device properties (this is how you discover the API)
-4. **Experiment**: `set_property` — try writing to properties you've identified
-5. **Configure**: Update `config/properties.toml` and `config/beverages.toml` with confirmed property names
-6. **Brew**: `brew_coffee` — brew from presets once property names are confirmed
+1. **`authenticate`** — Logs in with your configured credentials. After the first successful login, a refresh token is saved so this step becomes automatic.
+2. **`list_devices`** — Finds your coffee machine and auto-selects it.
+3. **`machine_status`** — Check the machine is online and ready.
+4. **`list_beverages`** — See what drinks are available.
+5. **`brew_coffee`** — Brew something. Make sure the machine has water, beans, and a cup in place.
+
+For exploration and development:
+- **`get_all_properties`** — Dump every property to understand the machine's full API surface.
+- **`set_property`** — Experiment with writable properties you've identified.
 
 ## Architecture
 
@@ -122,14 +157,20 @@ Claude ─── MCP (stdio) ──→ FastMCP Server
                     De'Longhi Coffee Machine (WiFi)
 ```
 
-The server is designed to work in two modes:
+### Key modules
 
-- **Discovery mode**: Property names are placeholders. Use `get_device_status` and `set_property` to explore the machine's API.
-- **Operational mode**: Property names are confirmed. `brew_coffee`, `power_on`/`power_off` work fully.
+- **`server.py`** — FastMCP tool definitions and the 3-step connection flow (handshake -> init -> command).
+- **`ayla_client.py`** — Async HTTP client for Ayla's REST API with cascading auth (refresh token -> SSO -> password) and automatic token persistence.
+- **`protocol.py`** — Binary packet construction: CRC-16/CCITT, brew/init/connect commands, recipe parsing, and Type-Value pair encoding for recipe parameters.
+- **`config.py`** — Pydantic-settings loading credentials from env vars prefixed `DELONGHI_`.
 
-## Reverse Engineering
+### Binary protocol
 
-The Ayla `app_id`, `app_secret`, and device property names are not publicly documented. See [docs/reverse-engineering-guide.md](docs/reverse-engineering-guide.md) for instructions on extracting them from the Coffee Link app.
+The machine uses a proprietary binary protocol tunneled as base64 strings through Ayla device properties. All commands go through the `app_data_request` property.
+
+Packet format: `[0x0D] [len] [payload] [CRC16] [4B timestamp BE] [4B device suffix BE]`
+
+Before sending any brew command, the server must complete a connection handshake — otherwise the machine acknowledges the command but doesn't execute it.
 
 ## Development
 
@@ -138,7 +179,7 @@ The Ayla `app_id`, `app_secret`, and device property names are not publicly docu
 uv sync --all-groups
 
 # Run tests
-uv run pytest
+uv run pytest -v
 
 # Run the MCP inspector
 uv run mcp dev src/delonghi_mcp/server.py
@@ -150,3 +191,11 @@ uv run mcp dev src/delonghi_mcp/server.py
 nix develop  # Enters a shell with all deps (including dev) and uv
 pytest       # Tests are available directly
 ```
+
+### Testing
+
+Tests use `respx` to mock `httpx` requests. The `ayla_client` fixture in `conftest.py` uses an isolated temp-dir token file to avoid interfering with real credentials. Protocol tests verify CRC and reproduce captured commands byte-for-byte.
+
+## Reverse Engineering
+
+The Ayla `app_id`, `app_secret`, and device property names are not publicly documented. See [docs/reverse-engineering-guide.md](docs/reverse-engineering-guide.md) for instructions on extracting them from the Coffee Link app.
