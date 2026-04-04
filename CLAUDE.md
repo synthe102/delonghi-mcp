@@ -13,6 +13,16 @@ uv run mcp dev src/delonghi_mcp/server.py  # Launch MCP Inspector for interactiv
 uv run delonghi-mcp         # Run the MCP server (stdio transport)
 ```
 
+### Nix
+
+The project includes a flake using [uv2nix](https://github.com/pyproject-nix/uv2nix).
+
+```bash
+nix develop                 # Dev shell with all deps + uv
+nix build                   # Build the package
+nix run                     # Run the MCP server
+```
+
 ## Architecture
 
 This is an MCP server that controls a De'Longhi Eletta Explore coffee maker through the Ayla Networks IoT cloud. The machine uses a proprietary binary protocol tunneled as base64 strings through Ayla device properties.

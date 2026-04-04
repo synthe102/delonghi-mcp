@@ -7,16 +7,28 @@ An MCP (Model Context Protocol) server for controlling a De'Longhi Eletta Explor
 ### Prerequisites
 
 - Python 3.13+
-- [uv](https://docs.astral.sh/uv/)
+- [uv](https://docs.astral.sh/uv/) or [Nix](https://nixos.org/)
 - A De'Longhi Coffee Link account (same credentials you use in the app)
 - The `app_id` and `app_secret` extracted from the Coffee Link app (see [reverse-engineering guide](docs/reverse-engineering-guide.md))
 
 ### Install
 
+#### With uv
+
 ```bash
 git clone <this-repo>
 cd delonghi-mcp
 uv sync
+```
+
+#### With Nix
+
+```bash
+git clone <this-repo>
+cd delonghi-mcp
+nix develop    # Enter dev shell with all dependencies
+nix build      # Build the package
+nix run        # Run the MCP server directly
 ```
 
 ### Configure
@@ -130,4 +142,11 @@ uv run pytest
 
 # Run the MCP inspector
 uv run mcp dev src/delonghi_mcp/server.py
+```
+
+### With Nix
+
+```bash
+nix develop  # Enters a shell with all deps (including dev) and uv
+pytest       # Tests are available directly
 ```
