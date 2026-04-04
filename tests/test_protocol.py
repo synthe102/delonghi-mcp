@@ -5,11 +5,17 @@ from __future__ import annotations
 import base64
 import struct
 
+import pytest
+
 from delonghi_mcp.protocol import (
+    CAPTURED_BREW_PARAMS,
+    QUANTITY_TYPES,
     build_brew_command,
     crc16_ccitt,
     extract_device_suffix,
     parse_stored_recipe,
+    parse_tv_pairs,
+    stored_to_brew_params,
 )
 
 
@@ -106,3 +112,58 @@ def test_build_brew_command_reproduces_captured_regular() -> None:
 
     cmd_b64 = build_brew_command(0x02, recipe_params, suffix, timestamp)
     assert cmd_b64 == "DRGD8AIDAQC0AgIbAScBBhKpadEpyAAZp6k="
+
+
+# ---------------------------------------------------------------------------
+# TV pair parsing and stored-to-brew conversion
+# ---------------------------------------------------------------------------
+
+
+def test_parse_tv_pairs_espresso() -> None:
+    """Parse TV pairs from espresso stored params."""
+    _, _, params = parse_stored_recipe("0BKm8AEBCAABACgbAQIEGQFnbg==")
+    pairs = parse_tv_pairs(params)
+    assert len(pairs) == 5
+    assert pairs[0] == (0x08, b"\x00")
+    assert pairs[1] == (0x01, b"\x00\x28")  # coffee size 40ml
+    assert pairs[2] == (0x1B, b"\x01")
+    assert pairs[3] == (0x02, b"\x04")
+    assert pairs[4] == (0x19, b"\x01")
+
+
+def test_stored_to_brew_params_espresso() -> None:
+    """Conversion must match captured espresso brew params."""
+    _, _, stored = parse_stored_recipe("0BKm8AEBCAABACgbAQIEGQFnbg==")
+    assert stored_to_brew_params(stored) == CAPTURED_BREW_PARAMS[0x01]
+
+
+def test_stored_to_brew_params_regular() -> None:
+    """Conversion must match captured regular coffee brew params."""
+    _, _, stored = parse_stored_recipe("0BCm8AECGQEbAQEAtAICL7A=")
+    assert stored_to_brew_params(stored) == CAPTURED_BREW_PARAMS[0x02]
+
+
+@pytest.mark.parametrize(
+    "b64,expected_recipe_id",
+    [
+        ("0Bem8AEHCwIcAhkBAQBBGwECAwkA0340", 0x07),  # Cappuccino (milk drink)
+        ("0BCm8AEQHAEZAQ8AlhsB3AU=", 0x10),  # Hot Water (no coffee)
+        ("0BKm8AEWHAEZAQ8AlhsBDQEtxQ==", 0x16),  # Tea (has 0x0D type)
+        ("0BOm8AEyGQEBACgPAFobAQIBvk0=", 0x32),  # Iced Americano
+        ("0BOm8AFQG/8ZAQEAXw8BBAIBouM=", 0x50),  # Mug Americano
+        ("0BCm8AF4GQEBAHgbAQIBcEs=", 0x78),  # Cold Brew Coffee
+    ],
+)
+def test_stored_to_brew_params_various(b64: str, expected_recipe_id: int) -> None:
+    """Conversion works for different beverage categories."""
+    _, recipe_id, stored = parse_stored_recipe(b64)
+    assert recipe_id == expected_recipe_id
+    brew = stored_to_brew_params(stored)
+    # Verify structure: ends with 0x06, contains 0x27=0x01, no 0x19
+    assert brew[-1:] == b"\x06"
+    assert b"\x27\x01" in brew
+    pairs = parse_tv_pairs(brew[:-1])  # strip terminator
+    types = [t for t, _ in pairs]
+    assert 0x19 not in types
+    assert 0x27 in types
+    assert types == sorted(types)  # sorted ascending

@@ -86,6 +86,43 @@ def parse_stored_recipe(recipe_b64: str) -> tuple[int, int, bytes]:
     return data[4], data[5], data[6:-2]
 
 
+# Types whose values are 2 bytes (big-endian uint16 quantities in ml).
+QUANTITY_TYPES: frozenset[int] = frozenset({0x01, 0x09, 0x0F})
+
+
+def parse_tv_pairs(data: bytes) -> list[tuple[int, bytes]]:
+    """Parse Type-Value pairs from recipe parameter bytes.
+
+    Most types have 1-byte values. Types in QUANTITY_TYPES (0x01, 0x09, 0x0F)
+    have 2-byte values representing quantities in ml.
+    """
+    pairs: list[tuple[int, bytes]] = []
+    i = 0
+    while i < len(data):
+        t = data[i]
+        vlen = 2 if t in QUANTITY_TYPES else 1
+        pairs.append((t, data[i + 1 : i + 1 + vlen]))
+        i += 1 + vlen
+    return pairs
+
+
+def stored_to_brew_params(stored_params: bytes) -> bytes:
+    """Convert stored recipe parameters to brew command parameters.
+
+    Stored recipes (0xA6F0) and brew commands (0x83F0) both use TV pairs
+    but differ in ordering and included types:
+    - Remove type 0x19 (stored-only metadata)
+    - Add type 0x27 value 0x01 (brew execution flag)
+    - Sort pairs by type ascending
+    - Append 0x06 terminator
+    """
+    pairs = parse_tv_pairs(stored_params)
+    pairs = [(t, v) for t, v in pairs if t != 0x19]
+    pairs.append((0x27, b"\x01"))
+    pairs.sort(key=lambda x: x[0])
+    return b"".join(bytes([t]) + v for t, v in pairs) + b"\x06"
+
+
 def extract_device_suffix(app_device_connected_b64: str) -> bytes:
     """Extract the 4-byte device suffix from app_device_connected."""
     return base64.b64decode(app_device_connected_b64)[-4:]
@@ -119,6 +156,33 @@ RECIPE_NAMES: dict[int, str] = {
     0x37: "Iced Cold Milk",
     0x38: "Iced Caffe Latte",
     0x39: "Over Ice Espresso",
+    # Mug variants
+    0x50: "Mug Americano",
+    0x51: "Mug Cappuccino",
+    0x52: "Mug Latte Macchiato",
+    0x53: "Mug Caffe Latte",
+    0x54: "Mug Cappuccino Mix",
+    0x55: "Mug Flat White",
+    0x56: "Mug Hot Milk",
+    # Iced Mug variants
+    0x64: "Iced Mug Over Ice",
+    0x65: "Iced Mug Americano",
+    0x66: "Iced Mug Cappuccino",
+    0x67: "Iced Mug Latte Macchiato",
+    0x68: "Iced Mug Caffe Latte",
+    0x69: "Iced Mug Cappuccino Mix",
+    0x6A: "Iced Mug Flat White",
+    0x6B: "Iced Mug Cold Milk",
+    # Cold Brew variants
+    0x78: "Cold Brew Coffee",
+    0x79: "Cold Brew Espresso",
+    0x7A: "Cold Brew Coffee Pot",
+    0x7B: "Cold Brew Latte",
+    0x7C: "Cold Brew Cappuccino",
+    # Cold Brew Mug variants
+    0x8C: "Cold Brew Mug",
+    0x8D: "Cold Brew Latte Mug",
+    0x8E: "Cold Brew Cappuccino Mug",
 }
 
 RECIPE_IDS: dict[str, int] = {v.lower(): k for k, v in RECIPE_NAMES.items()}

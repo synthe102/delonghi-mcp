@@ -13,7 +13,6 @@ from delonghi_mcp.ayla_client import AylaClient
 from delonghi_mcp.config import AylaSettings
 from delonghi_mcp.exceptions import DeLonghiMCPError, NotAuthenticatedError
 from delonghi_mcp.protocol import (
-    CAPTURED_BREW_PARAMS,
     RECIPE_IDS,
     RECIPE_NAMES,
     STATUS_PROPERTIES,
@@ -21,6 +20,8 @@ from delonghi_mcp.protocol import (
     build_connect_command,
     build_init_command,
     extract_device_suffix,
+    parse_stored_recipe,
+    stored_to_brew_params,
 )
 
 
@@ -30,6 +31,7 @@ class AppContext:
     settings: AylaSettings
     selected_dsn: str | None = None
     device_suffix: bytes | None = None
+    recipe_cache: dict[int, bytes] | None = None
 
 
 @asynccontextmanager
@@ -63,6 +65,30 @@ async def _connect_to_machine(app: AppContext) -> None:
     dsn = app.selected_dsn
     await app.client.set_property("app_device_connected", build_connect_command(suffix), dsn)
     await app.client.set_property("app_data_request", build_init_command(suffix), dsn)
+
+
+async def _get_brew_params(app: AppContext) -> dict[int, bytes]:
+    """Fetch and cache brew parameters for all stored recipes.
+
+    Reads all device properties, finds profile-1 recipe properties,
+    parses each stored recipe, and converts to brew command format.
+    """
+    if app.recipe_cache is not None:
+        return app.recipe_cache
+
+    all_props = await app.client.get_device_properties(app.selected_dsn)
+    cache: dict[int, bytes] = {}
+    for prop in all_props:
+        if not (prop.name.startswith("d") and "_rec_1_" in prop.name and prop.value):
+            continue
+        try:
+            _profile_id, recipe_id, stored_params = parse_stored_recipe(prop.value)
+            cache[recipe_id] = stored_to_brew_params(stored_params)
+        except (ValueError, IndexError):
+            continue
+
+    app.recipe_cache = cache
+    return cache
 
 
 def _truncate(value: object, max_len: int = 80) -> str:
@@ -316,9 +342,7 @@ async def brew_coffee(
 ) -> str:
     """Brew a specific beverage using the machine's current profile settings.
 
-    Currently supported: espresso, regular coffee.
-    More beverages can be added by capturing their brew commands from the
-    Coffee Link app via MITM proxy.
+    Automatically discovers all available recipes from the machine.
 
     WARNING: This will physically operate the coffee machine. Make sure it
     has water, beans, and a cup in place before brewing.
@@ -333,22 +357,25 @@ async def brew_coffee(
 
     beverage_name = RECIPE_NAMES.get(recipe_id, beverage)
 
-    if recipe_id not in CAPTURED_BREW_PARAMS:
-        captured = "\n".join(
-            f"  - {RECIPE_NAMES[rid]}" for rid in sorted(CAPTURED_BREW_PARAMS)
+    try:
+        brew_params = await _get_brew_params(app)
+    except DeLonghiMCPError as e:
+        return f"ERROR fetching recipes: {e}"
+
+    if recipe_id not in brew_params:
+        available = "\n".join(
+            f"  - {RECIPE_NAMES.get(rid, f'ID 0x{rid:02X}')}"
+            for rid in sorted(brew_params)
         )
         return (
-            f"ERROR: '{beverage_name}' brew command has not been captured yet.\n\n"
-            f"Currently available:\n{captured}\n\n"
-            "To add more beverages, brew them from the Coffee Link app while "
-            "running mitmproxy, then add the captured params to protocol.py "
-            "CAPTURED_BREW_PARAMS."
+            f"ERROR: '{beverage_name}' recipe not found on the machine.\n\n"
+            f"Available recipes:\n{available}"
         )
 
     try:
         await _connect_to_machine(app)
         suffix = await _ensure_device_suffix(app)
-        command = build_brew_command(recipe_id, CAPTURED_BREW_PARAMS[recipe_id], suffix)
+        command = build_brew_command(recipe_id, brew_params[recipe_id], suffix)
         result = await app.client.set_property("app_data_request", command, dsn)
         return f"Brewing {beverage_name}!\nCommand sent successfully.\nResponse: {result}"
     except DeLonghiMCPError as e:
@@ -362,23 +389,21 @@ async def brew_coffee(
 
 @mcp.tool()
 async def list_beverages(ctx: Context) -> str:
-    """List all known beverage types and their availability.
+    """List all beverages available on the machine.
 
-    Beverages marked READY have captured brew commands and can be brewed.
-    Others need their commands captured from the Coffee Link app first.
+    Reads stored recipes directly from the machine to show what can be brewed.
     """
+    app = _get_ctx(ctx)
+
+    try:
+        brew_params = await _get_brew_params(app)
+    except DeLonghiMCPError as e:
+        return f"ERROR fetching recipes: {e}"
+
     lines = ["Available beverages:\n"]
-    for recipe_id, name in sorted(RECIPE_NAMES.items(), key=lambda x: x[1]):
-        status = "READY" if recipe_id in CAPTURED_BREW_PARAMS else "needs capture"
-        lines.append(f"  {name} (ID 0x{recipe_id:02X}) [{status}]")
+    for recipe_id in sorted(brew_params):
+        name = RECIPE_NAMES.get(recipe_id, f"Unknown (0x{recipe_id:02X})")
+        lines.append(f"  {name} (ID 0x{recipe_id:02X})")
 
-    ready = len(CAPTURED_BREW_PARAMS)
-    total = len(RECIPE_NAMES)
-    lines.append(f"\n{ready}/{total} beverages ready to brew.")
-    if ready < total:
-        lines.append(
-            "To add more, brew them from the Coffee Link app while running "
-            "mitmproxy, then add the captured params to protocol.py."
-        )
-
+    lines.append(f"\n{len(brew_params)} beverages ready to brew.")
     return "\n".join(lines)

@@ -21,7 +21,7 @@ This is an MCP server that controls a De'Longhi Eletta Explore coffee maker thro
 
 ### Key modules
 
-- **`protocol.py`** — Binary packet construction: CRC-16/CCITT, brew/init/connect commands, recipe ID mappings. All commands go through a single Ayla property (`app_data_request`) as base64-encoded binary. The `CAPTURED_BREW_PARAMS` dict holds verified brew command payloads — new drinks require MITM-capturing the params from the Coffee Link app.
+- **`protocol.py`** — Binary packet construction: CRC-16/CCITT, brew/init/connect commands, recipe ID mappings. All commands go through a single Ayla property (`app_data_request`) as base64-encoded binary. Recipe parameters use a **Type-Value (TV) pair** encoding; `stored_to_brew_params()` converts stored recipe format to brew command format automatically.
 
 - **`ayla_client.py`** — Async HTTP client for Ayla's REST API. Handles three auth methods (persisted refresh token -> SSO token -> email/password) with automatic token refresh. Persists the refresh token to `.ayla_token.json` so the SSO token is only needed once.
 
@@ -36,7 +36,7 @@ Packet: `[0x0D] [len] [payload] [CRC16] [4B timestamp BE] [4B device suffix BE]`
 - `len = len(payload) + 3`
 - CRC-16/CCITT (init 0x1D0F) over `[0x0D, len, ...payload]`
 - Device suffix: constant 4 bytes extracted from `app_device_connected` property
-- Stored recipe params (d059_rec_1_* properties) use a **different byte ordering** than brew command params — they cannot be sent directly as brew commands
+- Stored recipe params (d059_rec_1_* properties) use **TV pairs** with different ordering than brew commands — `stored_to_brew_params()` handles the conversion (drop type 0x19, add type 0x27, sort ascending, append 0x06). Types 0x01/0x09/0x0F have 2-byte values (quantities in ml), others have 1-byte values.
 
 ### Testing
 
