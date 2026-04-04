@@ -114,6 +114,89 @@ Add to your Claude Desktop config (`claude_desktop_config.json`):
 }
 ```
 
+### With Nix
+
+Run directly from the flake (no clone needed):
+
+```bash
+nix run github:synthe102/delonghi-mcp
+```
+
+Or from a local checkout:
+
+```bash
+nix run .
+```
+
+For Claude Code / Claude Desktop, point the MCP config at the flake output:
+
+```json
+{
+  "mcpServers": {
+    "delonghi": {
+      "command": "nix",
+      "args": ["run", "github:synthe102/delonghi-mcp"],
+      "env": {
+        "DELONGHI_AYLA_APP_ID": "your-app-id",
+        "DELONGHI_AYLA_APP_SECRET": "your-app-secret"
+      }
+    }
+  }
+}
+```
+
+#### As part of a NixOS / Home Manager flake
+
+Add this repository as a flake input and include the package in your system or user packages:
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    delonghi-mcp.url = "github:synthe102/delonghi-mcp";
+    delonghi-mcp.inputs.nixpkgs.follows = "nixpkgs";
+  };
+
+  outputs = { nixpkgs, delonghi-mcp, ... }: {
+    # NixOS system configuration
+    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [{
+        environment.systemPackages = [
+          delonghi-mcp.packages.x86_64-linux.default
+        ];
+      }];
+    };
+
+    # Or with Home Manager
+    homeConfigurations.myuser = home-manager.lib.homeManagerConfiguration {
+      # ...
+      modules = [{
+        home.packages = [
+          delonghi-mcp.packages.x86_64-linux.default
+        ];
+      }];
+    };
+  };
+}
+```
+
+Then use `delonghi-mcp` as the command in your MCP config:
+
+```json
+{
+  "mcpServers": {
+    "delonghi": {
+      "command": "delonghi-mcp",
+      "env": {
+        "DELONGHI_AYLA_APP_ID": "your-app-id",
+        "DELONGHI_AYLA_APP_SECRET": "your-app-secret"
+      }
+    }
+  }
+}
+```
+
 ### MCP Inspector (Development)
 
 ```bash
