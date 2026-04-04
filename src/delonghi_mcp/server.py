@@ -19,6 +19,7 @@ from delonghi_mcp.protocol import (
     build_brew_command,
     build_connect_command,
     build_init_command,
+    build_power_on_command,
     extract_device_suffix,
     parse_stored_recipe,
     stored_to_brew_params,
@@ -145,6 +146,31 @@ async def list_devices(ctx: Context) -> str:
         lines.append(f"Auto-selected device: {devices[0].dsn}")
 
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Tool: power_on
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def power_on(ctx: Context, dsn: str | None = None) -> str:
+    """Wake the coffee machine from standby.
+
+    Sends the power-on command (0x840F) to bring the machine out of
+    sleep/standby mode. The machine needs a moment to heat up before
+    it can brew.
+    """
+    app = _get_ctx(ctx)
+    dsn = dsn or app.selected_dsn
+
+    try:
+        suffix = await _ensure_device_suffix(app)
+        command = build_power_on_command(suffix)
+        result = await app.client.set_property("app_data_request", command, dsn)
+        return f"Power-on command sent.\nResponse: {result}"
+    except DeLonghiMCPError as e:
+        return f"ERROR: {e}"
 
 
 # ---------------------------------------------------------------------------

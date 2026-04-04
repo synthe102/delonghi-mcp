@@ -63,6 +63,12 @@ def build_brew_command(
     return _build_packet(payload, device_suffix, timestamp)
 
 
+def build_power_on_command(device_suffix: bytes, timestamp: int | None = None) -> str:
+    """Build the power-on command (0x840F) to wake the machine from standby."""
+    payload = bytes([0x84, 0x0F, 0x02, 0x01])
+    return _build_packet(payload, device_suffix, timestamp)
+
+
 def build_init_command(device_suffix: bytes, timestamp: int | None = None) -> str:
     """Build the initialization command (0xE8F0) sent before brew commands."""
     payload = bytes([0xE8, 0xF0, 0x00, 0xED, 0x7C])
