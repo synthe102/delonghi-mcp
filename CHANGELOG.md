@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/synthe102/delonghi-mcp/compare/v0.3.1...v0.4.0) (2026-04-05)
+
+
+### Features
+
+* add quantity and intensity customization to brew_coffee ([#14](https://github.com/synthe102/delonghi-mcp/issues/14)) ([971901d](https://github.com/synthe102/delonghi-mcp/commit/971901d829688519038fa4cb107727e347354e65))
+
 ## [0.3.1](https://github.com/synthe102/delonghi-mcp/compare/v0.3.0...v0.3.1) (2026-04-05)
 
 
