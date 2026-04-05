@@ -21,5 +21,10 @@ delonghi-mcp = "delonghi_mcp.__main__:main"
 requires = ["uv_build>=0.11.3,<0.12.0"]
 build-backend = "uv_build"
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = ["integration: hits real Ayla API (requires DELONGHI_* env vars)"]
+addopts = "-m 'not integration'"
+
 [dependency-groups]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "respx>=0.22", "ruff>=0.11", "ty>=0.0.1a7"]

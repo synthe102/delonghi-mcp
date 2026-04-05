@@ -50,15 +50,14 @@ These are extracted from the Coffee Link app — see [docs/reverse-engineering-g
 
 #### Authentication
 
-The server supports three authentication methods, tried in this order:
+The server supports two authentication methods, tried in this order:
 
 1. **Persisted refresh token** (automatic) — After a successful login, the server saves a refresh token to `.ayla_token.json`. On subsequent launches, it uses this token automatically. No manual intervention needed until the token expires.
 
-2. **SSO token** — A Gigya JWT captured from the Coffee Link app's `token_sign_in` request via MITM proxy. Set `DELONGHI_AYLA_SSO_TOKEN` in `.env`. This is the preferred method for initial setup since it doesn't require your De'Longhi account password.
+2. **SSO token** — A Gigya JWT captured from the Coffee Link app's `token_sign_in` request via MITM proxy. Set `DELONGHI_AYLA_SSO_TOKEN` in `.env`.
 
-3. **Email/password** — Your Coffee Link account credentials. Set `DELONGHI_AYLA_EMAIL` and `DELONGHI_AYLA_PASSWORD` in `.env`.
+In practice: provide `app_id` + `app_secret` and an SSO token for the first login. After that, the persisted refresh token handles re-authentication automatically.
 
-In practice: provide `app_id` + `app_secret` and one of SSO token or email/password for the first login. After that, the persisted refresh token handles re-authentication automatically.
 
 #### Environment variables
 
@@ -67,8 +66,6 @@ In practice: provide `app_id` + `app_secret` and one of SSO token or email/passw
 | `DELONGHI_AYLA_APP_ID` | Yes | Ayla application ID (extracted from Coffee Link app) |
 | `DELONGHI_AYLA_APP_SECRET` | Yes | Ayla application secret |
 | `DELONGHI_AYLA_SSO_TOKEN` | No | Gigya JWT for SSO auth (preferred for initial login) |
-| `DELONGHI_AYLA_EMAIL` | No | Coffee Link account email (alternative auth) |
-| `DELONGHI_AYLA_PASSWORD` | No | Coffee Link account password (alternative auth) |
 | `DELONGHI_AYLA_AUTH_BASE_URL` | No | Auth endpoint (default: EU — `https://user-field-eu.aylanetworks.com`) |
 | `DELONGHI_AYLA_ADS_BASE_URL` | No | Device API endpoint (default: EU — `https://ads-eu.aylanetworks.com`) |
 
@@ -93,7 +90,7 @@ Add to your Claude Code MCP settings (`~/.claude.json` or project `.mcp.json`):
 }
 ```
 
-Other credentials (SSO token or email/password) can go in the project's `.env` file instead of the MCP config. Once authenticated, the server persists a refresh token so only `app_id` and `app_secret` are needed in the MCP config long-term.
+The SSO token can go in the project's `.env` file instead of the MCP config. Once authenticated, the server persists a refresh token so only `app_id` and `app_secret` are needed in the MCP config long-term.
 
 ### With Claude Desktop
 

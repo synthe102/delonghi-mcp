@@ -78,7 +78,7 @@ class AylaClient:
     async def authenticate(self) -> AuthState:
         """Authenticate with Ayla IoT cloud.
 
-        Tries in order: persisted refresh token, SSO token, email/password.
+        Tries in order: persisted refresh token, then SSO token.
         """
         saved_token = self._load_refresh_token()
         if saved_token:
@@ -97,7 +97,10 @@ class AylaClient:
         if sso_token:
             return await self._authenticate_sso(sso_token)
 
-        return await self._authenticate_password()
+        raise AuthenticationError(
+            "No SSO token configured and no saved refresh token. "
+            "Set DELONGHI_AYLA_SSO_TOKEN in .env."
+        )
 
     async def _authenticate_sso(self, token: str) -> AuthState:
         url = f"{self._settings.ayla_auth_base_url}/api/v1/token_sign_in"
@@ -121,33 +124,6 @@ class AylaClient:
         if resp.status_code != 200:
             raise AuthenticationError(
                 f"SSO authentication failed with status {resp.status_code}: {resp.text}"
-            )
-        return self._parse_auth_response(resp.json())
-
-    async def _authenticate_password(self) -> AuthState:
-        url = f"{self._settings.ayla_auth_base_url}/users/sign_in.json"
-        payload = {
-            "user": {
-                "email": self._settings.ayla_email,
-                "password": self._settings.ayla_password.get_secret_value(),
-                "application": {
-                    "app_id": self._settings.ayla_app_id,
-                    "app_secret": self._settings.ayla_app_secret,
-                },
-            }
-        }
-
-        resp = await self._http.post(url, json=payload)
-        if resp.status_code == 401:
-            raise AuthenticationError("Invalid email or password.")
-        if resp.status_code == 404:
-            raise AuthenticationError(
-                "Invalid app_id or app_secret. "
-                "See docs/reverse-engineering-guide.md to obtain correct values."
-            )
-        if resp.status_code != 200:
-            raise AuthenticationError(
-                f"Authentication failed with status {resp.status_code}: {resp.text}"
             )
         return self._parse_auth_response(resp.json())
 

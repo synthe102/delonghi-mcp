@@ -8,6 +8,7 @@ import httpx
 import pytest
 import respx
 from httpx import Response
+from pydantic import SecretStr
 
 from delonghi_mcp.ayla_client import AylaClient
 from delonghi_mcp.config import AylaSettings
@@ -21,8 +22,8 @@ from delonghi_mcp.exceptions import (
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_authenticate_success(ayla_client: AylaClient) -> None:
-    respx.post("https://auth.test.example.com/users/sign_in.json").mock(
+async def test_authenticate_sso_success(ayla_client: AylaClient) -> None:
+    respx.post("https://auth.test.example.com/api/v1/token_sign_in").mock(
         return_value=Response(
             200,
             json={
@@ -42,19 +43,19 @@ async def test_authenticate_success(ayla_client: AylaClient) -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_authenticate_invalid_credentials(ayla_client: AylaClient) -> None:
-    respx.post("https://auth.test.example.com/users/sign_in.json").mock(
+async def test_authenticate_sso_expired(ayla_client: AylaClient) -> None:
+    respx.post("https://auth.test.example.com/api/v1/token_sign_in").mock(
         return_value=Response(401, json={"error": "unauthorized"})
     )
 
-    with pytest.raises(AuthenticationError, match="Invalid email or password"):
+    with pytest.raises(AuthenticationError, match="SSO token rejected"):
         await ayla_client.authenticate()
 
 
 @pytest.mark.asyncio
 @respx.mock
 async def test_authenticate_invalid_app_id(ayla_client: AylaClient) -> None:
-    respx.post("https://auth.test.example.com/users/sign_in.json").mock(
+    respx.post("https://auth.test.example.com/api/v1/token_sign_in").mock(
         return_value=Response(404, json={"error": "not found"})
     )
 
@@ -65,7 +66,9 @@ async def test_authenticate_invalid_app_id(ayla_client: AylaClient) -> None:
 @pytest.mark.asyncio
 async def test_not_authenticated_raises(tmp_path: pathlib.Path) -> None:
     """A client with no credentials raises NotAuthenticatedError."""
-    settings = AylaSettings(ayla_app_id="", ayla_app_secret="")
+    settings = AylaSettings(
+        ayla_app_id="", ayla_app_secret="", ayla_sso_token=SecretStr("")
+    )
     client = AylaClient(
         httpx.AsyncClient(), settings, token_file=tmp_path / ".ayla_token.json"
     )
@@ -77,7 +80,7 @@ async def test_not_authenticated_raises(tmp_path: pathlib.Path) -> None:
 @respx.mock
 async def test_list_devices(ayla_client: AylaClient) -> None:
     # Authenticate first
-    respx.post("https://auth.test.example.com/users/sign_in.json").mock(
+    respx.post("https://auth.test.example.com/api/v1/token_sign_in").mock(
         return_value=Response(
             200,
             json={"access_token": "tok", "refresh_token": "ref"},
@@ -116,7 +119,7 @@ async def test_list_devices(ayla_client: AylaClient) -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_device_properties(ayla_client: AylaClient) -> None:
-    respx.post("https://auth.test.example.com/users/sign_in.json").mock(
+    respx.post("https://auth.test.example.com/api/v1/token_sign_in").mock(
         return_value=Response(200, json={"access_token": "tok", "refresh_token": "ref"})
     )
     await ayla_client.authenticate()
@@ -159,7 +162,7 @@ async def test_get_device_properties(ayla_client: AylaClient) -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_property(ayla_client: AylaClient) -> None:
-    respx.post("https://auth.test.example.com/users/sign_in.json").mock(
+    respx.post("https://auth.test.example.com/api/v1/token_sign_in").mock(
         return_value=Response(200, json={"access_token": "tok", "refresh_token": "ref"})
     )
     await ayla_client.authenticate()
@@ -188,7 +191,7 @@ async def test_get_property(ayla_client: AylaClient) -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_property_not_found(ayla_client: AylaClient) -> None:
-    respx.post("https://auth.test.example.com/users/sign_in.json").mock(
+    respx.post("https://auth.test.example.com/api/v1/token_sign_in").mock(
         return_value=Response(200, json={"access_token": "tok", "refresh_token": "ref"})
     )
     await ayla_client.authenticate()
@@ -204,7 +207,7 @@ async def test_get_property_not_found(ayla_client: AylaClient) -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_set_property(ayla_client: AylaClient) -> None:
-    respx.post("https://auth.test.example.com/users/sign_in.json").mock(
+    respx.post("https://auth.test.example.com/api/v1/token_sign_in").mock(
         return_value=Response(200, json={"access_token": "tok", "refresh_token": "ref"})
     )
     await ayla_client.authenticate()
@@ -232,7 +235,7 @@ async def test_set_property(ayla_client: AylaClient) -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_resolve_dsn_auto_select(ayla_client: AylaClient) -> None:
-    respx.post("https://auth.test.example.com/users/sign_in.json").mock(
+    respx.post("https://auth.test.example.com/api/v1/token_sign_in").mock(
         return_value=Response(200, json={"access_token": "tok", "refresh_token": "ref"})
     )
     await ayla_client.authenticate()
@@ -268,7 +271,7 @@ async def test_resolve_dsn_auto_select(ayla_client: AylaClient) -> None:
 async def test_resolve_dsn_multiple_devices_requires_dsn(
     ayla_client: AylaClient,
 ) -> None:
-    respx.post("https://auth.test.example.com/users/sign_in.json").mock(
+    respx.post("https://auth.test.example.com/api/v1/token_sign_in").mock(
         return_value=Response(200, json={"access_token": "tok", "refresh_token": "ref"})
     )
     await ayla_client.authenticate()
@@ -306,7 +309,7 @@ async def test_resolve_dsn_multiple_devices_requires_dsn(
 @respx.mock
 async def test_token_refresh_on_401(ayla_client: AylaClient) -> None:
     """Test that a 401 response triggers token refresh and retry."""
-    respx.post("https://auth.test.example.com/users/sign_in.json").mock(
+    respx.post("https://auth.test.example.com/api/v1/token_sign_in").mock(
         return_value=Response(
             200, json={"access_token": "tok_old", "refresh_token": "ref"}
         )

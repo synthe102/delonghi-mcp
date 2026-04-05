@@ -33,7 +33,7 @@ This is an MCP server that controls a De'Longhi Eletta Explore coffee maker thro
 
 - **`protocol.py`** — Binary packet construction: CRC-16/CCITT, brew/init/connect/power-on commands, recipe ID mappings. All commands go through a single Ayla property (`app_data_request`) as base64-encoded binary. Recipe parameters use a **Type-Value (TV) pair** encoding; `stored_to_brew_params()` converts stored recipe format to brew command format automatically.
 
-- **`ayla_client.py`** — Async HTTP client for Ayla's REST API. Handles three auth methods (persisted refresh token -> SSO token -> email/password) with automatic token refresh. Persists the refresh token to `.ayla_token.json` so the SSO token is only needed once. Auto-authenticates on demand in `_ensure_auth()` — no explicit authenticate call needed.
+- **`ayla_client.py`** — Async HTTP client for Ayla's REST API. Handles auth via persisted refresh token -> SSO token (email/password is deprecated). Persists the refresh token to `.ayla_token.json` so the SSO token is only needed once. Auto-authenticates on demand in `_ensure_auth()` — no explicit authenticate call needed.
 
 - **`server.py`** — FastMCP tool definitions. Auto-authenticates at startup in `lifespan()`. Before brewing, must run the 3-step connection flow: handshake (`app_device_connected`) -> init command (0xE8F0) -> brew command (0x83F0). Skipping the handshake causes the machine to acknowledge but not execute commands.
 
