@@ -29,6 +29,25 @@ def real_settings() -> AylaSettings:
 
 
 @pytest.fixture
+def real_email_settings() -> AylaSettings:
+    settings = AylaSettings()
+    if not (settings.ayla_app_id and settings.ayla_app_secret):
+        pytest.skip("DELONGHI_AYLA_APP_ID / DELONGHI_AYLA_APP_SECRET not set")
+    if not (settings.email and settings.password.get_secret_value()):
+        pytest.skip("DELONGHI_EMAIL / DELONGHI_PASSWORD not set")
+    return settings
+
+
+@pytest.fixture
+def real_email_client(real_email_settings: AylaSettings, tmp_path: Path) -> AylaClient:
+    return AylaClient(
+        httpx.AsyncClient(),
+        real_email_settings,
+        token_file=tmp_path / ".ayla_token.json",
+    )
+
+
+@pytest.fixture
 def real_client(real_settings: AylaSettings, tmp_path: Path) -> AylaClient:
     return AylaClient(
         httpx.AsyncClient(), real_settings, token_file=tmp_path / ".ayla_token.json"
@@ -54,6 +73,13 @@ async def test_wrong_app_id_raises(
 
     with pytest.raises(AuthenticationError, match="app_id or app_secret"):
         await client.authenticate()
+
+
+async def test_gigya_email_auth_succeeds(real_email_client: AylaClient) -> None:
+    auth = await real_email_client.authenticate()
+    assert real_email_client.is_authenticated
+    assert auth.access_token
+    assert auth.refresh_token
 
 
 async def test_wrong_app_secret_raises(

@@ -19,6 +19,8 @@ def ayla_settings() -> AylaSettings:
         ayla_app_id="test-app-id",
         ayla_app_secret="test-app-secret",
         ayla_sso_token=SecretStr("test-sso-token"),
+        email="",
+        password=SecretStr(""),
         ayla_auth_base_url="https://auth.test.example.com",
         ayla_ads_base_url="https://ads.test.example.com",
     )

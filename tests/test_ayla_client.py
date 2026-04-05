@@ -336,3 +336,156 @@ async def test_token_refresh_on_401(ayla_client: AylaClient) -> None:
     assert devices == []
     assert refresh_route.call_count == 1
     assert devices_route.call_count == 2
+
+
+# --- Gigya email/password auth tests ---
+
+
+@pytest.fixture
+def gigya_settings() -> AylaSettings:
+    return AylaSettings(
+        ayla_app_id="test-app-id",
+        ayla_app_secret="test-app-secret",
+        ayla_sso_token=SecretStr(""),
+        email="test@example.com",
+        password=SecretStr("test-password"),
+        ayla_auth_base_url="https://auth.test.example.com",
+        ayla_ads_base_url="https://ads.test.example.com",
+    )
+
+
+@pytest.fixture
+def gigya_client(
+    http_client: httpx.AsyncClient, gigya_settings: AylaSettings, tmp_path: pathlib.Path
+) -> AylaClient:
+    return AylaClient(
+        http_client, gigya_settings, token_file=tmp_path / ".ayla_token.json"
+    )
+
+
+GIGYA_LOGIN_URL = "https://accounts.eu1.gigya.com/accounts.login"
+
+
+def _mock_gigya_login_success() -> respx.Route:
+    return respx.post(GIGYA_LOGIN_URL).mock(
+        return_value=Response(
+            200,
+            json={
+                "errorCode": 0,
+                "statusCode": 200,
+                "id_token": "gigya-jwt-token",
+                "sessionInfo": {
+                    "sessionToken": "st2.s.tok",
+                    "sessionSecret": "test-session-secret",
+                    "expires_in": "7776000",
+                },
+            },
+        )
+    )
+
+
+def _mock_ayla_sso_success() -> respx.Route:
+    return respx.post("https://auth.test.example.com/api/v1/token_sign_in").mock(
+        return_value=Response(
+            200,
+            json={
+                "access_token": "tok_gigya",
+                "refresh_token": "ref_gigya",
+                "role": "EndUser",
+            },
+        )
+    )
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_authenticate_gigya_success(gigya_client: AylaClient) -> None:
+    _mock_gigya_login_success()
+    _mock_ayla_sso_success()
+
+    auth = await gigya_client.authenticate()
+    assert auth.access_token == "tok_gigya"
+    assert auth.refresh_token == "ref_gigya"
+    assert auth.role == "EndUser"
+    assert gigya_client.is_authenticated
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_authenticate_gigya_bad_credentials(gigya_client: AylaClient) -> None:
+    respx.post(GIGYA_LOGIN_URL).mock(
+        return_value=Response(
+            403,
+            json={
+                "errorCode": 403042,
+                "errorMessage": "Invalid LoginID",
+                "errorDetails": "loginID does not match any existing account",
+                "statusCode": 403,
+            },
+        )
+    )
+
+    with pytest.raises(AuthenticationError, match="Gigya login failed with status 403"):
+        await gigya_client.authenticate()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_authenticate_gigya_error_in_body(gigya_client: AylaClient) -> None:
+    """Gigya can return 200 with a non-zero errorCode in the body."""
+    respx.post(GIGYA_LOGIN_URL).mock(
+        return_value=Response(
+            200,
+            json={
+                "errorCode": 403042,
+                "errorMessage": "Invalid LoginID",
+                "errorDetails": "loginID does not match any existing account",
+                "statusCode": 403,
+            },
+        )
+    )
+
+    with pytest.raises(AuthenticationError, match="loginID does not match"):
+        await gigya_client.authenticate()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_authenticate_gigya_missing_id_token(
+    gigya_client: AylaClient,
+) -> None:
+    respx.post(GIGYA_LOGIN_URL).mock(
+        return_value=Response(
+            200,
+            json={"errorCode": 0, "statusCode": 200},
+        )
+    )
+
+    with pytest.raises(AuthenticationError, match="missing id_token"):
+        await gigya_client.authenticate()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_authenticate_prefers_gigya_over_sso(tmp_path: pathlib.Path) -> None:
+    """When both email/password and SSO token are set, Gigya is tried first."""
+    settings = AylaSettings(
+        ayla_app_id="test-app-id",
+        ayla_app_secret="test-app-secret",
+        ayla_sso_token=SecretStr("should-not-be-used"),
+        email="test@example.com",
+        password=SecretStr("test-password"),
+        ayla_auth_base_url="https://auth.test.example.com",
+        ayla_ads_base_url="https://ads.test.example.com",
+    )
+    client = AylaClient(
+        httpx.AsyncClient(), settings, token_file=tmp_path / ".ayla_token.json"
+    )
+
+    login_route = _mock_gigya_login_success()
+    _mock_ayla_sso_success()
+
+    auth = await client.authenticate()
+    assert auth.access_token == "tok_gigya"
+    # Gigya login was called (not direct SSO)
+    assert login_route.call_count == 1
