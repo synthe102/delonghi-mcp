@@ -165,6 +165,7 @@ async def power_on(ctx: Context, dsn: str | None = None) -> str:
     dsn = dsn or app.selected_dsn
 
     try:
+        await _connect_to_machine(app)
         suffix = await _ensure_device_suffix(app)
         command = build_power_on_command(suffix)
         result = await app.client.set_property("app_data_request", command, dsn)
