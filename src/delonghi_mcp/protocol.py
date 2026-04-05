@@ -132,6 +132,30 @@ def stored_to_brew_params(stored_params: bytes) -> bytes:
     return b"".join(bytes([t]) + v for t, v in pairs) + b"\x06"
 
 
+def override_brew_params(brew_params: bytes, overrides: dict[int, int]) -> bytes:
+    """Override specific TV pair values in brew command parameters.
+
+    Args:
+        brew_params: Output of stored_to_brew_params() (sorted TV pairs + 0x06 terminator).
+        overrides: Mapping of type code to new value (ml for quantity types, raw for others).
+
+    Raises:
+        ValueError: If a type in overrides is not present in the recipe.
+    """
+    pairs = parse_tv_pairs(brew_params[:-1])  # strip 0x06 terminator
+    type_index = {t: i for i, (t, _) in enumerate(pairs)}
+    for type_code, value in overrides.items():
+        if type_code not in type_index:
+            raise ValueError(
+                f"Parameter type 0x{type_code:02X} not present in this recipe"
+            )
+        if type_code in QUANTITY_TYPES:
+            pairs[type_index[type_code]] = (type_code, struct.pack(">H", value))
+        else:
+            pairs[type_index[type_code]] = (type_code, bytes([value]))
+    return b"".join(bytes([t]) + v for t, v in pairs) + b"\x06"
+
+
 def extract_device_suffix(app_device_connected_b64: str) -> bytes:
     """Extract the 4-byte device suffix from app_device_connected."""
     return base64.b64decode(app_device_connected_b64)[-4:]

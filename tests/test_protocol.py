@@ -12,6 +12,7 @@ from delonghi_mcp.protocol import (
     build_brew_command,
     crc16_ccitt,
     extract_device_suffix,
+    override_brew_params,
     parse_stored_recipe,
     parse_tv_pairs,
     stored_to_brew_params,
@@ -166,3 +167,65 @@ def test_stored_to_brew_params_various(b64: str, expected_recipe_id: int) -> Non
     assert 0x19 not in types
     assert 0x27 in types
     assert types == sorted(types)  # sorted ascending
+
+
+# ---------------------------------------------------------------------------
+# override_brew_params
+# ---------------------------------------------------------------------------
+
+
+def test_override_brew_params_coffee_quantity() -> None:
+    """Override coffee quantity (type 0x01) on espresso."""
+    original = CAPTURED_BREW_PARAMS[0x01]
+    modified = override_brew_params(original, {0x01: 60})
+    pairs = parse_tv_pairs(modified[:-1])
+    qty_pair = next(v for t, v in pairs if t == 0x01)
+    assert qty_pair == b"\x00\x3c"  # 60ml
+
+
+def test_override_brew_params_intensity() -> None:
+    """Override intensity (type 0x02) on espresso."""
+    original = CAPTURED_BREW_PARAMS[0x01]
+    modified = override_brew_params(original, {0x02: 2})
+    pairs = parse_tv_pairs(modified[:-1])
+    intensity_pair = next(v for t, v in pairs if t == 0x02)
+    assert intensity_pair == b"\x02"
+
+
+def test_override_brew_params_milk_quantity() -> None:
+    """Override milk quantity (type 0x09) on cappuccino."""
+    _, _, stored = parse_stored_recipe("0Bem8AEHCwIcAhkBAQBBGwECAwkA0340")
+    brew = stored_to_brew_params(stored)
+    modified = override_brew_params(brew, {0x09: 150})
+    pairs = parse_tv_pairs(modified[:-1])
+    milk_pair = next(v for t, v in pairs if t == 0x09)
+    assert milk_pair == b"\x00\x96"  # 150ml
+
+
+def test_override_brew_params_multiple() -> None:
+    """Override both coffee quantity and intensity simultaneously."""
+    original = CAPTURED_BREW_PARAMS[0x01]
+    modified = override_brew_params(original, {0x01: 50, 0x02: 3})
+    pairs = parse_tv_pairs(modified[:-1])
+    qty = next(v for t, v in pairs if t == 0x01)
+    intensity = next(v for t, v in pairs if t == 0x02)
+    assert qty == b"\x00\x32"  # 50ml
+    assert intensity == b"\x03"
+
+
+def test_override_brew_params_absent_type_raises() -> None:
+    """Overriding a type not in the recipe raises ValueError."""
+    original = CAPTURED_BREW_PARAMS[0x01]  # espresso has no milk (0x09)
+    with pytest.raises(ValueError, match="0x09"):
+        override_brew_params(original, {0x09: 100})
+
+
+def test_override_brew_params_preserves_structure() -> None:
+    """Override preserves terminator, execution flag, and sort order."""
+    original = CAPTURED_BREW_PARAMS[0x01]
+    modified = override_brew_params(original, {0x01: 80})
+    assert modified[-1:] == b"\x06"
+    assert b"\x27\x01" in modified
+    pairs = parse_tv_pairs(modified[:-1])
+    types = [t for t, _ in pairs]
+    assert types == sorted(types)
