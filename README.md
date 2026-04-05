@@ -50,13 +50,15 @@ These are extracted from the Coffee Link app — see [docs/reverse-engineering-g
 
 #### Authentication
 
-The server supports two authentication methods, tried in this order:
+The server supports three authentication methods, tried in this order:
 
 1. **Persisted refresh token** (automatic) — After a successful login, the server saves a refresh token to `.ayla_token.json`. On subsequent launches, it uses this token automatically. No manual intervention needed until the token expires.
 
-2. **SSO token** — A Gigya JWT captured from the Coffee Link app's `token_sign_in` request via MITM proxy. Set `DELONGHI_AYLA_SSO_TOKEN` in `.env`.
+2. **Email/password** — Your De'Longhi Coffee Link account credentials. Set `DELONGHI_EMAIL` and `DELONGHI_PASSWORD` in `.env`. The server authenticates via Gigya (the same SSO provider the Coffee Link app uses) to obtain a JWT, then exchanges it for Ayla tokens.
 
-In practice: provide `app_id` + `app_secret` and an SSO token for the first login. After that, the persisted refresh token handles re-authentication automatically.
+3. **SSO token** — A Gigya JWT captured from the Coffee Link app's `token_sign_in` request via MITM proxy. Set `DELONGHI_AYLA_SSO_TOKEN` in `.env`. This is a fallback for cases where email/password auth doesn't work.
+
+In practice: provide `app_id` + `app_secret` and your email/password for the first login. After that, the persisted refresh token handles re-authentication automatically.
 
 
 #### Environment variables
@@ -65,7 +67,9 @@ In practice: provide `app_id` + `app_secret` and an SSO token for the first logi
 |----------|----------|-------------|
 | `DELONGHI_AYLA_APP_ID` | Yes | Ayla application ID (extracted from Coffee Link app) |
 | `DELONGHI_AYLA_APP_SECRET` | Yes | Ayla application secret |
-| `DELONGHI_AYLA_SSO_TOKEN` | No | Gigya JWT for SSO auth (preferred for initial login) |
+| `DELONGHI_EMAIL` | No | De'Longhi Coffee Link account email (recommended for initial login) |
+| `DELONGHI_PASSWORD` | No | De'Longhi Coffee Link account password |
+| `DELONGHI_AYLA_SSO_TOKEN` | No | Gigya JWT for SSO auth (fallback, captured via MITM proxy) |
 | `DELONGHI_AYLA_AUTH_BASE_URL` | No | Auth endpoint (default: EU — `https://user-field-eu.aylanetworks.com`) |
 | `DELONGHI_AYLA_ADS_BASE_URL` | No | Device API endpoint (default: EU — `https://ads-eu.aylanetworks.com`) |
 
@@ -90,7 +94,7 @@ Add to your Claude Code MCP settings (`~/.claude.json` or project `.mcp.json`):
 }
 ```
 
-The SSO token can go in the project's `.env` file instead of the MCP config. Once authenticated, the server persists a refresh token so only `app_id` and `app_secret` are needed in the MCP config long-term.
+Email/password and SSO token can go in the project's `.env` file instead of the MCP config. Once authenticated, the server persists a refresh token so only `app_id` and `app_secret` are needed in the MCP config long-term.
 
 ### With Claude Desktop
 
@@ -239,7 +243,7 @@ Claude ─── MCP (stdio) ──→ FastMCP Server
 ### Key modules
 
 - **`server.py`** — FastMCP tool definitions with auto-authentication at startup and the 3-step connection flow (handshake -> init -> command).
-- **`ayla_client.py`** — Async HTTP client for Ayla's REST API with cascading auth (refresh token -> SSO -> password), automatic token persistence, and on-demand re-authentication.
+- **`ayla_client.py`** — Async HTTP client for Ayla's REST API with cascading auth (refresh token -> email/password via Gigya -> raw SSO token), automatic token persistence, and on-demand re-authentication.
 - **`protocol.py`** — Binary packet construction: CRC-16/CCITT, brew/init/connect/power-on commands, recipe parsing, and Type-Value pair encoding for recipe parameters.
 - **`config.py`** — Pydantic-settings loading credentials from env vars prefixed `DELONGHI_`.
 

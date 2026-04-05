@@ -18,6 +18,9 @@ from delonghi_mcp.exceptions import (
 )
 from delonghi_mcp.models import AuthState, DeviceInfo, DeviceProperty
 
+GIGYA_API_KEY = "3_e5qn7USZK-QtsIso1wCelqUKAK_IVEsYshRIssQ-X-k55haiZXmKWDHDRul2e5Y2"
+GIGYA_BASE_URL = "https://accounts.eu1.gigya.com"
+
 _TOKEN_FILE = Path(__file__).resolve().parent.parent.parent / ".ayla_token.json"
 
 
@@ -78,7 +81,8 @@ class AylaClient:
     async def authenticate(self) -> AuthState:
         """Authenticate with Ayla IoT cloud.
 
-        Tries in order: persisted refresh token, then SSO token.
+        Tries in order: persisted refresh token, then email/password via Gigya,
+        then raw SSO token.
         """
         saved_token = self._load_refresh_token()
         if saved_token:
@@ -93,14 +97,52 @@ class AylaClient:
             except AuthenticationError:
                 self._auth = None
 
+        email = self._settings.email
+        password = self._settings.password.get_secret_value()
+        if email and password:
+            return await self._authenticate_gigya(email, password)
+
         sso_token = self._settings.ayla_sso_token.get_secret_value()
         if sso_token:
             return await self._authenticate_sso(sso_token)
 
         raise AuthenticationError(
-            "No SSO token configured and no saved refresh token. "
-            "Set DELONGHI_AYLA_SSO_TOKEN in .env."
+            "No credentials configured and no saved refresh token. "
+            "Set DELONGHI_EMAIL + DELONGHI_PASSWORD, or DELONGHI_AYLA_SSO_TOKEN in .env."
         )
+
+    async def _authenticate_gigya(self, email: str, password: str) -> AuthState:
+        """Authenticate via Gigya (email/password) and exchange for Ayla tokens."""
+        # Step 1: Gigya login → id_token (JWT)
+        resp = await self._http.post(
+            f"{GIGYA_BASE_URL}/accounts.login",
+            data={
+                "apiKey": GIGYA_API_KEY,
+                "loginID": email,
+                "password": password,
+                "sessionExpiration": 7776000,
+                "targetEnv": "mobile",
+                "include": "profile,id_token,data,preferences",
+                "httpStatusCodes": "true",
+            },
+        )
+        if resp.status_code != 200:
+            raise AuthenticationError(
+                f"Gigya login failed with status {resp.status_code}: {resp.text}"
+            )
+        login_data = resp.json()
+        if login_data.get("errorCode", 0) != 0:
+            msg = login_data.get(
+                "errorDetails", login_data.get("errorMessage", "Unknown error")
+            )
+            raise AuthenticationError(f"Gigya login failed: {msg}")
+
+        id_token = login_data.get("id_token")
+        if not id_token:
+            raise AuthenticationError("Gigya login response missing id_token.")
+
+        # Step 2: Exchange JWT for Ayla tokens
+        return await self._authenticate_sso(id_token)
 
     async def _authenticate_sso(self, token: str) -> AuthState:
         url = f"{self._settings.ayla_auth_base_url}/api/v1/token_sign_in"
