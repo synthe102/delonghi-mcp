@@ -212,7 +212,7 @@ uv run mcp dev src/delonghi_mcp/server.py
 | `power_on` | Wake the machine from standby mode. |
 | `machine_status` | Quick status overview: machine state, grounds container level, descaling status, beverage counters. |
 | `list_beverages` | Show all beverages available on the machine (discovered from stored recipes). |
-| `brew_coffee` | Brew a beverage by name using the machine's stored recipe settings. Reads recipe parameters directly from the machine. |
+| `brew_coffee` | Brew a beverage by name. Optionally override coffee/milk/water quantity (ml) and intensity (1-5). Reads recipe parameters from the machine and applies overrides before brewing. |
 | `get_all_properties` | Read every property the machine exposes (full discovery dump). |
 
 ### Getting started workflow

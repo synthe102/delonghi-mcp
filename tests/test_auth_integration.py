@@ -61,9 +61,7 @@ async def test_sso_auth_succeeds(real_client: AylaClient) -> None:
     assert auth.refresh_token
 
 
-async def test_wrong_app_id_raises(
-    real_settings: AylaSettings, tmp_path: Path
-) -> None:
+async def test_wrong_app_id_raises(real_settings: AylaSettings, tmp_path: Path) -> None:
     bad = AylaSettings(
         ayla_app_id="bad-app-id",
         ayla_app_secret=real_settings.ayla_app_secret,

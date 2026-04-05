@@ -46,7 +46,8 @@ Packet: `[0x0D] [len] [payload] [CRC16] [4B timestamp BE] [4B device suffix BE]`
 - `len = len(payload) + 3`
 - CRC-16/CCITT (init 0x1D0F) over `[0x0D, len, ...payload]`
 - Device suffix: constant 4 bytes extracted from `app_device_connected` property
-- Stored recipe params (d059_rec_1_* properties) use **TV pairs** with different ordering than brew commands — `stored_to_brew_params()` handles the conversion (drop type 0x19, add type 0x27, sort ascending, append 0x06). Types 0x01/0x09/0x0F have 2-byte values (quantities in ml), others have 1-byte values.
+- Stored recipe params (d059_rec_1_* properties) use **TV pairs** with different ordering than brew commands — `stored_to_brew_params()` handles the conversion (drop type 0x19, add type 0x27, sort ascending, append 0x06). Types 0x01/0x09/0x0F have 2-byte values (quantities in ml), others have 1-byte values. `override_brew_params()` can modify specific TV pair values (quantity/intensity) in the converted brew params before sending.
+- Known TV pair types: `0x01` (coffee ml), `0x09` (milk ml), `0x0F` (water ml), `0x02` (intensity 1-5). Not all types are present in every recipe (e.g., espresso has no milk type).
 - Known command opcodes: `0x83F0` (brew), `0xE8F0` (init), `0x840F` (power on), `0x950F` (read machine setting — sent by Coffee Link app when opening settings, not a write).
 
 ### Testing

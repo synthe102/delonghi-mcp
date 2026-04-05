@@ -21,6 +21,7 @@ from delonghi_mcp.protocol import (
     build_init_command,
     build_power_on_command,
     extract_device_suffix,
+    override_brew_params,
     parse_stored_recipe,
     stored_to_brew_params,
 )
@@ -280,10 +281,22 @@ async def brew_coffee(
     ctx: Context,
     beverage: str,
     dsn: str | None = None,
+    coffee_quantity_ml: int | None = None,
+    milk_quantity_ml: int | None = None,
+    water_quantity_ml: int | None = None,
+    intensity: int | None = None,
 ) -> str:
-    """Brew a specific beverage using the machine's current profile settings.
+    """Brew a specific beverage, optionally overriding recipe settings.
 
     Automatically discovers all available recipes from the machine.
+
+    Args:
+        beverage: Name of the beverage to brew (e.g. "espresso", "cappuccino").
+        dsn: Device serial number. Uses auto-selected device if omitted.
+        coffee_quantity_ml: Coffee amount in ml (e.g. 40 for espresso, 180 for regular).
+        milk_quantity_ml: Milk amount in ml. Only available for milk-based drinks.
+        water_quantity_ml: Water amount in ml. Only available for americano, hot water, tea.
+        intensity: Coffee strength from 1 (mild) to 5 (extra strong).
 
     WARNING: This will physically operate the coffee machine. Make sure it
     has water, beans, and a cup in place before brewing.
@@ -313,10 +326,30 @@ async def brew_coffee(
             f"Available recipes:\n{available}"
         )
 
+    # Build overrides from optional parameters
+    overrides: dict[int, int] = {}
+    for param_val, type_code, label, lo, hi in [
+        (coffee_quantity_ml, 0x01, "coffee_quantity_ml", 1, 999),
+        (milk_quantity_ml, 0x09, "milk_quantity_ml", 1, 999),
+        (water_quantity_ml, 0x0F, "water_quantity_ml", 1, 999),
+        (intensity, 0x02, "intensity", 1, 5),
+    ]:
+        if param_val is not None:
+            if not (lo <= param_val <= hi):
+                return f"ERROR: {label} must be between {lo} and {hi}, got {param_val}"
+            overrides[type_code] = param_val
+
+    recipe_bytes = brew_params[recipe_id]
+    if overrides:
+        try:
+            recipe_bytes = override_brew_params(recipe_bytes, overrides)
+        except ValueError as e:
+            return f"ERROR: {e}"
+
     try:
         await _connect_to_machine(app)
         suffix = await _ensure_device_suffix(app)
-        command = build_brew_command(recipe_id, brew_params[recipe_id], suffix)
+        command = build_brew_command(recipe_id, recipe_bytes, suffix)
         result = await app.client.set_property("app_data_request", command, dsn)
         return (
             f"Brewing {beverage_name}!\nCommand sent successfully.\nResponse: {result}"
