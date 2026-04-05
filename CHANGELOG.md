@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/synthe102/delonghi-mcp/compare/v0.3.0...v0.3.1) (2026-04-05)
+
+
+### Bug Fixes
+
+* run connection handshake before power_on command ([#11](https://github.com/synthe102/delonghi-mcp/issues/11)) ([63e8503](https://github.com/synthe102/delonghi-mcp/commit/63e8503106e71b384e4ff67d2251cdc48bdf4522))
+
 ## [0.3.0](https://github.com/synthe102/delonghi-mcp/compare/v0.2.0...v0.3.0) (2026-04-05)
 
 
