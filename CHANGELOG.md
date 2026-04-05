@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/synthe102/delonghi-mcp/compare/v0.2.0...v0.3.0) (2026-04-05)
+
+
+### Features
+
+* add email/password auth via Gigya SSO ([#9](https://github.com/synthe102/delonghi-mcp/issues/9)) ([1273a47](https://github.com/synthe102/delonghi-mcp/commit/1273a4761e40e05febe1a7e7f20bcadee7420f0d))
+
 ## [0.2.0](https://github.com/synthe102/delonghi-mcp/compare/v0.1.0...v0.2.0) (2026-04-05)
 
 
