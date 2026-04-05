@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.0](https://github.com/synthe102/delonghi-mcp/compare/v0.3.1...v0.4.0) (2026-04-05)
+
+
+### Features
+
+* add email/password auth via Gigya SSO ([#9](https://github.com/synthe102/delonghi-mcp/issues/9)) ([1273a47](https://github.com/synthe102/delonghi-mcp/commit/1273a4761e40e05febe1a7e7f20bcadee7420f0d))
+* remove email/password auth, add integration tests ([a96d6bc](https://github.com/synthe102/delonghi-mcp/commit/a96d6bc2b814c4a450bd05263eb121af59406eb8))
+
+
+### Bug Fixes
+
+* run connection handshake before power_on command ([#11](https://github.com/synthe102/delonghi-mcp/issues/11)) ([63e8503](https://github.com/synthe102/delonghi-mcp/commit/63e8503106e71b384e4ff67d2251cdc48bdf4522))
+
+
+### Documentation
+
+* claude -&gt; agents ([4ead369](https://github.com/synthe102/delonghi-mcp/commit/4ead369eec765eb35387a3772ea78bf77d8fd478))
+* remove LLM hallucinations ([f6117d6](https://github.com/synthe102/delonghi-mcp/commit/f6117d69a895b4d2b990f291cf4a00ad8dcf01ef))
+
 ## [0.3.1](https://github.com/synthe102/delonghi-mcp/compare/v0.3.0...v0.3.1) (2026-04-05)
 
 
