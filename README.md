@@ -1,6 +1,6 @@
 # De'Longhi Eletta Explore MCP Server
 
-An [MCP](https://modelcontextprotocol.io/) server for controlling a De'Longhi Eletta Explore coffee maker through Claude. Communicates with the machine via the Ayla Networks IoT cloud — the same platform used by the De'Longhi Coffee Link app.
+An [MCP](https://modelcontextprotocol.io/) server for controlling a De'Longhi Eletta Explore coffee maker through Agents. Communicates with the machine via the Ayla Networks IoT cloud — the same platform used by the De'Longhi Coffee Link app.
 
 ## Setup
 
