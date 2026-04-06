@@ -4,100 +4,25 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
 
-import httpx
 from mcp.server.fastmcp import Context, FastMCP
 
-from delonghi_mcp.ayla_client import AylaClient
-from delonghi_mcp.config import AylaSettings
+from delonghi_mcp.api import DeLonghiAPI
 from delonghi_mcp.exceptions import DeLonghiMCPError
-from delonghi_mcp.protocol import (
-    RECIPE_IDS,
-    RECIPE_NAMES,
-    STATUS_PROPERTIES,
-    build_brew_command,
-    build_connect_command,
-    build_init_command,
-    build_power_on_command,
-    extract_device_suffix,
-    override_brew_params,
-    parse_stored_recipe,
-    stored_to_brew_params,
-)
-
-
-@dataclass
-class AppContext:
-    client: AylaClient
-    settings: AylaSettings
-    selected_dsn: str | None = None
-    device_suffix: bytes | None = None
-    recipe_cache: dict[int, bytes] | None = None
+from delonghi_mcp.protocol import STATUS_PROPERTIES
 
 
 @asynccontextmanager
-async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
-    settings = AylaSettings()
-    async with httpx.AsyncClient(timeout=30.0) as http_client:
-        client = AylaClient(http_client, settings)
-        if settings.is_configured() or client.has_saved_credentials():
-            try:
-                await client.authenticate()
-            except Exception:
-                pass  # Tools will re-attempt via _ensure_auth
-        yield AppContext(client=client, settings=settings)
+async def lifespan(server: FastMCP) -> AsyncIterator[DeLonghiAPI]:
+    async with DeLonghiAPI() as api:
+        yield api
 
 
 mcp = FastMCP("delonghi-coffee", lifespan=lifespan)
 
 
-def _get_ctx(ctx: Context) -> AppContext:
+def _get_api(ctx: Context) -> DeLonghiAPI:
     return ctx.request_context.lifespan_context
-
-
-async def _ensure_device_suffix(app: AppContext) -> bytes:
-    if app.device_suffix:
-        return app.device_suffix
-    prop = await app.client.get_property("app_device_connected", app.selected_dsn)
-    if not prop.value:
-        raise DeLonghiMCPError("Cannot read app_device_connected property.")
-    app.device_suffix = extract_device_suffix(prop.value)
-    return app.device_suffix
-
-
-async def _connect_to_machine(app: AppContext) -> None:
-    """Establish connection with the machine (required before sending commands)."""
-    suffix = await _ensure_device_suffix(app)
-    dsn = app.selected_dsn
-    await app.client.set_property(
-        "app_device_connected", build_connect_command(suffix), dsn
-    )
-    await app.client.set_property("app_data_request", build_init_command(suffix), dsn)
-
-
-async def _get_brew_params(app: AppContext) -> dict[int, bytes]:
-    """Fetch and cache brew parameters for all stored recipes.
-
-    Reads all device properties, finds profile-1 recipe properties,
-    parses each stored recipe, and converts to brew command format.
-    """
-    if app.recipe_cache is not None:
-        return app.recipe_cache
-
-    all_props = await app.client.get_device_properties(app.selected_dsn)
-    cache: dict[int, bytes] = {}
-    for prop in all_props:
-        if not (prop.name.startswith("d") and "_rec_1_" in prop.name and prop.value):
-            continue
-        try:
-            _profile_id, recipe_id, stored_params = parse_stored_recipe(prop.value)
-            cache[recipe_id] = stored_to_brew_params(stored_params)
-        except (ValueError, IndexError):
-            continue
-
-    app.recipe_cache = cache
-    return cache
 
 
 def _truncate(value: object, max_len: int = 80) -> str:
@@ -117,17 +42,14 @@ async def list_devices(ctx: Context) -> str:
     Returns device serial numbers (DSN), models, and connection status.
     If only one device is found, it is auto-selected for all future commands.
     """
-    app = _get_ctx(ctx)
+    api = _get_api(ctx)
     try:
-        devices = await app.client.list_devices()
+        devices = await api.list_devices()
     except DeLonghiMCPError as e:
         return f"ERROR: {e}"
 
     if not devices:
         return "No devices found on this account."
-
-    if len(devices) == 1:
-        app.selected_dsn = devices[0].dsn
 
     lines = [f"Found {len(devices)} device(s):\n"]
     for d in devices:
@@ -162,21 +84,16 @@ async def power_on(ctx: Context, dsn: str | None = None) -> str:
     sleep/standby mode. The machine needs a moment to heat up before
     it can brew.
     """
-    app = _get_ctx(ctx)
-    dsn = dsn or app.selected_dsn
-
+    api = _get_api(ctx)
     try:
-        await _connect_to_machine(app)
-        suffix = await _ensure_device_suffix(app)
-        command = build_power_on_command(suffix)
-        result = await app.client.set_property("app_data_request", command, dsn)
+        result = await api.power_on(dsn)
         return f"Power-on command sent.\nResponse: {result}"
     except DeLonghiMCPError as e:
         return f"ERROR: {e}"
 
 
 # ---------------------------------------------------------------------------
-# Tool: machine_status (bulk fetch, no N+1)
+# Tool: machine_status
 # ---------------------------------------------------------------------------
 
 
@@ -187,22 +104,19 @@ async def machine_status(ctx: Context, dsn: str | None = None) -> str:
     Shows machine state, grounds container level, descaling status,
     beverage counters, and other key metrics.
     """
-    app = _get_ctx(ctx)
-    dsn = dsn or app.selected_dsn
-
+    api = _get_api(ctx)
     try:
-        all_props = await app.client.get_device_properties(dsn)
+        status = await api.get_machine_status(dsn)
     except DeLonghiMCPError as e:
         return f"ERROR: {e}"
 
-    props_by_name = {p.name: p for p in all_props}
-
     lines = ["Machine Status:\n"]
-    for prop_name, label in STATUS_PROPERTIES.items():
-        prop = props_by_name.get(prop_name)
+    for label, prop in status.items():
         if prop is None:
             lines.append(f"  {label}: (unavailable)")
-        elif prop_name == "d512_percentage_to_deca" and isinstance(prop.value, int):
+        elif label == STATUS_PROPERTIES.get("d512_percentage_to_deca") and isinstance(
+            prop.value, int
+        ):
             if prop.value > 100:
                 lines.append(
                     f"  {label}: {prop.value}% — DESCALING OVERDUE "
@@ -228,11 +142,9 @@ async def get_all_properties(ctx: Context, dsn: str | None = None) -> str:
     This is the full discovery tool — returns every property the machine
     exposes. For a quick status overview, use machine_status instead.
     """
-    app = _get_ctx(ctx)
-    dsn = dsn or app.selected_dsn
-
+    api = _get_api(ctx)
     try:
-        props = await app.client.get_device_properties(dsn)
+        props = await api.get_all_properties(dsn)
     except DeLonghiMCPError as e:
         return f"ERROR: {e}"
 
@@ -264,18 +176,6 @@ async def get_all_properties(ctx: Context, dsn: str | None = None) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_recipe_id(beverage: str) -> int | None:
-    normalized = beverage.lower().strip().replace("-", " ").replace("_", " ")
-    # Exact match
-    if normalized in RECIPE_IDS:
-        return RECIPE_IDS[normalized]
-    # Partial match
-    for name, rid in RECIPE_IDS.items():
-        if normalized in name or name in normalized:
-            return rid
-    return None
-
-
 @mcp.tool()
 async def brew_coffee(
     ctx: Context,
@@ -301,61 +201,24 @@ async def brew_coffee(
     WARNING: This will physically operate the coffee machine. Make sure it
     has water, beans, and a cup in place before brewing.
     """
-    app = _get_ctx(ctx)
-    dsn = dsn or app.selected_dsn
-
-    recipe_id = _resolve_recipe_id(beverage)
-    if recipe_id is None:
-        available = "\n".join(f"  - {name}" for name in sorted(RECIPE_IDS.keys()))
-        return f"ERROR: Unknown beverage '{beverage}'.\n\nAvailable:\n{available}"
-
-    beverage_name = RECIPE_NAMES.get(recipe_id, beverage)
-
+    api = _get_api(ctx)
     try:
-        brew_params = await _get_brew_params(app)
-    except DeLonghiMCPError as e:
-        return f"ERROR fetching recipes: {e}"
-
-    if recipe_id not in brew_params:
-        available = "\n".join(
-            f"  - {RECIPE_NAMES.get(rid, f'ID 0x{rid:02X}')}"
-            for rid in sorted(brew_params)
+        result = await api.brew(
+            beverage,
+            dsn,
+            coffee_quantity_ml=coffee_quantity_ml,
+            milk_quantity_ml=milk_quantity_ml,
+            water_quantity_ml=water_quantity_ml,
+            intensity=intensity,
         )
         return (
-            f"ERROR: '{beverage_name}' recipe not found on the machine.\n\n"
-            f"Available recipes:\n{available}"
+            f"Brewing {result.beverage_name}!\n"
+            f"Command sent successfully.\nResponse: {result.response}"
         )
-
-    # Build overrides from optional parameters
-    overrides: dict[int, int] = {}
-    for param_val, type_code, label, lo, hi in [
-        (coffee_quantity_ml, 0x01, "coffee_quantity_ml", 1, 999),
-        (milk_quantity_ml, 0x09, "milk_quantity_ml", 1, 999),
-        (water_quantity_ml, 0x0F, "water_quantity_ml", 1, 999),
-        (intensity, 0x02, "intensity", 1, 5),
-    ]:
-        if param_val is not None:
-            if not (lo <= param_val <= hi):
-                return f"ERROR: {label} must be between {lo} and {hi}, got {param_val}"
-            overrides[type_code] = param_val
-
-    recipe_bytes = brew_params[recipe_id]
-    if overrides:
-        try:
-            recipe_bytes = override_brew_params(recipe_bytes, overrides)
-        except ValueError as e:
-            return f"ERROR: {e}"
-
-    try:
-        await _connect_to_machine(app)
-        suffix = await _ensure_device_suffix(app)
-        command = build_brew_command(recipe_id, recipe_bytes, suffix)
-        result = await app.client.set_property("app_data_request", command, dsn)
-        return (
-            f"Brewing {beverage_name}!\nCommand sent successfully.\nResponse: {result}"
-        )
+    except ValueError as e:
+        return f"ERROR: {e}"
     except DeLonghiMCPError as e:
-        return f"ERROR brewing {beverage_name}: {e}"
+        return f"ERROR brewing: {e}"
 
 
 # ---------------------------------------------------------------------------
@@ -369,17 +232,15 @@ async def list_beverages(ctx: Context) -> str:
 
     Reads stored recipes directly from the machine to show what can be brewed.
     """
-    app = _get_ctx(ctx)
-
+    api = _get_api(ctx)
     try:
-        brew_params = await _get_brew_params(app)
+        beverages = await api.list_beverages()
     except DeLonghiMCPError as e:
         return f"ERROR fetching recipes: {e}"
 
     lines = ["Available beverages:\n"]
-    for recipe_id in sorted(brew_params):
-        name = RECIPE_NAMES.get(recipe_id, f"Unknown (0x{recipe_id:02X})")
+    for recipe_id, name in beverages.items():
         lines.append(f"  {name} (ID 0x{recipe_id:02X})")
 
-    lines.append(f"\n{len(brew_params)} beverages ready to brew.")
+    lines.append(f"\n{len(beverages)} beverages ready to brew.")
     return "\n".join(lines)

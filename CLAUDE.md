@@ -27,7 +27,7 @@ nix run                     # Run the MCP server
 
 This is an MCP server that controls a De'Longhi Eletta Explore coffee maker through the Ayla Networks IoT cloud. The machine uses a proprietary binary protocol tunneled as base64 strings through Ayla device properties.
 
-**Data flow:** Claude -> MCP (stdio) -> `server.py` -> `ayla_client.py` -> httpx -> Ayla Cloud API -> Coffee Machine (WiFi)
+**Data flow:** Claude -> MCP (stdio) -> `server.py` -> `api.py` -> `ayla_client.py` -> httpx -> Ayla Cloud API -> Coffee Machine (WiFi)
 
 ### Key modules
 
@@ -35,7 +35,9 @@ This is an MCP server that controls a De'Longhi Eletta Explore coffee maker thro
 
 - **`ayla_client.py`** — Async HTTP client for Ayla's REST API. Auth fallback chain: persisted refresh token -> email/password via Gigya (SAP Customer Data Cloud) -> raw SSO token. Gigya auth calls `accounts.login` (with `include=id_token`) to obtain a JWT, then exchanges it for Ayla tokens via `token_sign_in`. Persists the refresh token to `.ayla_token.json` so Gigya/SSO is only needed once. Auto-authenticates on demand in `_ensure_auth()` — no explicit authenticate call needed.
 
-- **`server.py`** — FastMCP tool definitions. Auto-authenticates at startup in `lifespan()`. Before brewing, must run the 3-step connection flow: handshake (`app_device_connected`) -> init command (0xE8F0) -> brew command (0x83F0). Skipping the handshake causes the machine to acknowledge but not execute commands.
+- **`api.py`** — High-level async API (`DeLonghiAPI` class) that orchestrates the full machine control flow: device discovery, connection handshake, brew parameter caching, recipe resolution, and brewing with optional overrides. Returns structured data and raises exceptions — consumers (MCP server, CLI) handle formatting and error display. Usable as an async context manager; owns httpx client lifecycle.
+
+- **`server.py`** — Thin FastMCP wrapper over `DeLonghiAPI`. Each tool delegates to the API and formats the result as text. The lifespan creates a `DeLonghiAPI` context manager. Before brewing, the API runs the 3-step connection flow: handshake (`app_device_connected`) -> init command (0xE8F0) -> brew command (0x83F0). Skipping the handshake causes the machine to acknowledge but not execute commands.
 
 - **`config.py`** — Pydantic-settings loading credentials from env vars prefixed `DELONGHI_`.
 
