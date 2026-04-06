@@ -224,8 +224,10 @@ The first two bytes of the payload identify the command type.
 | Type | Description |
 |------|-------------|
 | `0x83 0xF0` | Brew command (execute a recipe) |
+| `0x84 0x0F` | Power on (wake machine from standby) |
+| `0x95 0x0F` | Read machine setting (sent by Coffee Link app when opening settings) |
 | `0xA6 0xF0` | Recipe data (stored profile recipe) |
-| `0xE8 0xF0` | Unknown (seen in initial `app_data_request` value) |
+| `0xE8 0xF0` | Initialization (sent before operational commands) |
 
 ## Brew Command (`0x83F0`)
 
@@ -260,9 +262,12 @@ Hex breakdown:
 83 F0           Command: Brew
 01              Recipe ID: Espresso
 03              Subcommand: Execute
-01 00 28 02 04  Recipe parameters (size=40ml, etc.)
-08 00 1B 01     Recipe parameters continued
-27 01 06        Recipe parameters continued
+01 00 28        TV: type=0x01 coffee=40ml
+02 04           TV: type=0x02 intensity=4
+08 00           TV: type=0x08 unknown
+1B 01           TV: type=0x1B unknown
+27 01           TV: type=0x27 brew flag=1
+06              Terminator
 35 3F           CRC-16
 69 D1 29 60     Timestamp (2026-04-04 15:08:16 UTC)
 00 19 A7 A9     Device suffix
@@ -279,8 +284,11 @@ Hex breakdown:
 83 F0           Command: Brew
 02              Recipe ID: Regular Coffee
 03              Subcommand: Execute
-01 00 B4 02 02  Recipe parameters (size=180ml, etc.)
-1B 01 27 01 06  Recipe parameters continued
+01 00 B4        TV: type=0x01 coffee=180ml
+02 02           TV: type=0x02 intensity=2
+1B 01           TV: type=0x1B unknown
+27 01           TV: type=0x27 brew flag=1
+06              Terminator
 12 A9           CRC-16
 69 D1 29 C8     Timestamp (2026-04-04 15:10:00 UTC)
 00 19 A7 A9     Device suffix
@@ -317,6 +325,62 @@ Hex breakdown:
 | 0x37 | 55 | Iced Cold Milk | (stored in d002/d003 defaults) |
 | 0x38 | 56 | Iced Caffe Latte | (stored in d002/d003 defaults) |
 | 0x39 | 57 | Over Ice Espresso | (stored in d002/d003 defaults) |
+| **Mug variants** ||||
+| 0x50 | 80 | Mug Americano | |
+| 0x51 | 81 | Mug Cappuccino | |
+| 0x52 | 82 | Mug Latte Macchiato | |
+| 0x53 | 83 | Mug Caffe Latte | |
+| 0x54 | 84 | Mug Cappuccino Mix | |
+| 0x55 | 85 | Mug Flat White | |
+| 0x56 | 86 | Mug Hot Milk | |
+| **Iced Mug variants** ||||
+| 0x64 | 100 | Iced Mug Over Ice | |
+| 0x65 | 101 | Iced Mug Americano | |
+| 0x66 | 102 | Iced Mug Cappuccino | |
+| 0x67 | 103 | Iced Mug Latte Macchiato | |
+| 0x68 | 104 | Iced Mug Caffe Latte | |
+| 0x69 | 105 | Iced Mug Cappuccino Mix | |
+| 0x6A | 106 | Iced Mug Flat White | |
+| 0x6B | 107 | Iced Mug Cold Milk | |
+| **Cold Brew variants** ||||
+| 0x78 | 120 | Cold Brew Coffee | |
+| 0x79 | 121 | Cold Brew Espresso | |
+| 0x7A | 122 | Cold Brew Coffee Pot | |
+| 0x7B | 123 | Cold Brew Latte | |
+| 0x7C | 124 | Cold Brew Cappuccino | |
+| **Cold Brew Mug variants** ||||
+| 0x8C | 140 | Cold Brew Mug | |
+| 0x8D | 141 | Cold Brew Latte Mug | |
+| 0x8E | 142 | Cold Brew Cappuccino Mug | |
+
+## Power On Command (`0x840F`)
+
+Wakes the machine from standby mode. Like brew commands, requires the connection handshake and init command first.
+
+### Packet Structure
+
+```
+┌────────┬──────┬──────┐
+│ 84 0F  │ 02   │ 01   │
+│ (2B)   │ (1B) │ (1B) │
+└────────┴──────┴──────┘
+```
+
+| Offset | Size | Field | Description |
+|--------|------|-------|-------------|
+| 0-1 | 2 | Command type | `0x84 0x0F` |
+| 2 | 1 | Unknown | `0x02` |
+| 3 | 1 | Unknown | `0x01` |
+
+### Full Sequence
+
+The power-on command requires the same 3-step connection flow:
+
+```
+1. POST app_device_connected  →  [timestamp][device_suffix]     (handshake)
+2. POST app_data_request      →  [0xE8F0 init command]          (initialization)
+3. POST app_data_request      →  [0x840F power on command]      (power on)
+```
 
 ## Stored Recipe Format (`0xA6F0`)
 
@@ -359,9 +423,11 @@ D0              Start marker (recipe)
 A6 F0           Type: Recipe data
 01              Profile ID: 1
 01              Recipe ID: Espresso
-08 00 01 00 28  Parameters (size=40ml at offset +4)
-1B 01 02 04     Parameters continued
-19 01           Parameters continued
+08 00           TV: type=0x08 unknown
+01 00 28        TV: type=0x01 coffee=40ml
+1B 01           TV: type=0x1B unknown
+02 04           TV: type=0x02 intensity=4
+19 01           TV: type=0x19 stored metadata
 67 6E           CRC-16
 ```
 
@@ -375,40 +441,80 @@ D0              Start marker (recipe)
 A6 F0           Type: Recipe data
 01              Profile ID: 1
 02              Recipe ID: Regular Coffee
-19 01 1B 01     Parameters
-01 00 B4 02 02  Parameters (size=180ml at offset +4)
+19 01           TV: type=0x19 stored metadata
+1B 01           TV: type=0x1B unknown
+01 00 B4        TV: type=0x01 coffee=180ml
+02 02           TV: type=0x02 intensity=2
 2F B0           CRC-16
 ```
 
-## Recipe Parameters
+## Recipe Parameters (Type-Value Pairs)
 
-Recipe parameters are encoded as variable-length byte sequences. The exact encoding has not been fully decoded, but observed patterns include:
+Recipe parameters are encoded as **Type-Value (TV) pairs** — a sequence of `[type_byte] [value_bytes]` entries. The value length depends on the type:
 
-### Known Parameter Values
+- **Quantity types** (`0x01`, `0x09`, `0x0F`): 2-byte values (big-endian uint16, representing milliliters)
+- **All other types**: 1-byte values
 
-From comparing espresso (40ml) and regular coffee (180ml):
+### Known TV Pair Types
 
-| Byte value | Decimal | Likely meaning |
-|------------|---------|----------------|
-| `0x14` | 20 | 20 ml |
-| `0x28` | 40 | 40 ml (espresso default) |
-| `0x50` | 80 | 80 ml |
-| `0x64` | 100 | 100 ml |
-| `0xB4` | 180 | 180 ml (regular coffee default) |
-| `0xF8` | 248 | ~250 ml |
+| Type | Value size | Description | Range |
+|------|-----------|-------------|-------|
+| `0x01` | 2 bytes | Coffee quantity (ml) | 20–248 ml |
+| `0x02` | 1 byte | Intensity / strength | 1–5 |
+| `0x08` | 1 byte | Unknown | |
+| `0x09` | 2 bytes | Milk quantity (ml) | |
+| `0x0F` | 2 bytes | Water quantity (ml) | |
+| `0x19` | 1 byte | Stored recipe metadata (not used in brew) | |
+| `0x1B` | 1 byte | Unknown | |
+| `0x27` | 1 byte | Brew execution flag (not present in stored recipes) | Always `0x01` |
 
-The parameters appear to encode the beverage size in milliliters as a direct byte value. Other parameters likely encode strength, temperature, milk level, and grind settings, but the exact byte positions vary between beverage types.
+Not all types are present in every recipe. For example, espresso has no milk type (`0x09`), and black coffees have no water type (`0x0F`).
+
+### Example: Parsing Espresso TV Pairs
+
+Stored recipe params: `08 00 01 00 28 1B 01 02 04 19 01`
+
+```
+Type 0x08, Value: 0x00        (unknown)
+Type 0x01, Value: 0x00 0x28   (coffee = 40 ml)
+Type 0x1B, Value: 0x01        (unknown)
+Type 0x02, Value: 0x04        (intensity = 4)
+Type 0x19, Value: 0x01        (stored metadata)
+```
 
 ### Relationship Between Stored Recipe and Brew Command
 
-The recipe parameters stored in per-profile properties (e.g., `d059_rec_1_espresso`) are reused in the brew command payload. The brew command wraps them with the `0x83F0` command type:
+Both stored recipes and brew commands use the same TV pair encoding, but with different included types and sort order. The conversion from stored to brew format:
+
+1. **Remove** type `0x19` (stored-only metadata)
+2. **Add** type `0x27` with value `0x01` (brew execution flag)
+3. **Sort** all pairs ascending by type byte
+4. **Append** `0x06` terminator byte
 
 ```
-Stored recipe:  [D0] [len] [A6 F0] [profile] [recipe_id] [params] [CRC]
-Brew command:   [0D] [len] [83 F0] [recipe_id] [03]       [params] [CRC] [timestamp] [suffix]
+Stored recipe:  [D0] [len] [A6 F0] [profile] [recipe_id] [TV pairs]              [CRC]
+Brew command:   [0D] [len] [83 F0] [recipe_id] [03]       [sorted TV pairs] [06]  [CRC] [timestamp] [suffix]
 ```
 
-Note that the stored recipe includes the profile ID and has a different ordering, while the brew command uses `0x03` as a subcommand byte and includes a timestamp trailer.
+### Example: Espresso Conversion
+
+```
+Stored TV pairs:  08 00  01 00 28  1B 01  02 04  19 01
+                                                  ^^^^^ remove 0x19
+
+After removing 0x19 and adding 0x27:
+                  08 00  01 00 28  1B 01  02 04  27 01
+
+Sorted by type:   01 00 28  02 04  08 00  1B 01  27 01
+
+With terminator:  01 00 28  02 04  08 00  1B 01  27 01  06
+```
+
+This matches the captured brew params: `01 00 28 02 04 08 00 1B 01 27 01 06`.
+
+### Overriding Parameters
+
+Individual TV pair values can be modified before sending a brew command, allowing customization of quantity and intensity without changing the stored recipe. The override replaces the value bytes for a specific type code while keeping all other parameters intact. Only types already present in the recipe can be overridden — attempting to add a missing type (e.g., milk to an espresso) will fail.
 
 ## Device Properties Reference
 
@@ -640,10 +746,10 @@ Response: D0 07 83 F0 [recipe_id] 00 [extra] [timestamp]
 
 ## Unknown / Future Work
 
-- **Recipe parameter encoding**: The exact meaning of each byte in the recipe parameters is not fully decoded. Size in ml appears as a direct byte value, but the positions of strength, temperature, grind, and milk level vary between beverage types.
-- **Machine responses**: The `app_data_response` property receives binary responses from the machine. The format has not been analyzed.
+- **Remaining TV pair types**: Types `0x08` and `0x1B` are present in recipes but their meaning is unknown. They likely encode temperature, grind setting, or other beverage parameters.
+- **Machine responses**: The `app_data_response` property receives binary responses from the machine. The format has not been fully analyzed beyond success detection (`0x00` status byte).
 - **Machine monitoring**: The `d302_monitor_machine` property contains real-time status in binary form.
-- **Power on/off**: The command to power on/off the machine has not been captured. It likely uses a different command type through `app_data_request`.
+- **Power off**: The power-on command (`0x840F`) is known, but the power-off command has not been captured.
+- **Read machine setting (`0x950F`)**: The Coffee Link app sends this command when opening the settings screen. The request and response formats have not been decoded.
 - **Recipe modification**: Writing to per-profile recipe properties to change beverage settings (size, strength, etc.) has not been tested.
-- **Iced/mug/cold-brew recipes**: These use additional recipe IDs (0x32+ for iced, 0x50+ for mug variants, 0x78+ for cold brew) and may have different parameter structures.
 - **Default recipe format**: The `d002_rec_default_1` through `d008_rec_default_7` properties contain JSON with longer base64 blobs that define the full parameter ranges (min/max/default) for each recipe. These have not been decoded.
