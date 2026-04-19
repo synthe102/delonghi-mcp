@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.0](https://github.com/synthe102/delonghi-mcp/compare/v0.5.0...v0.6.0) (2026-04-19)
+
+
+### Features
+
+* add --json output mode to the CLI ([18fe7eb](https://github.com/synthe102/delonghi-mcp/commit/18fe7eb9fbc34c8004121caa2a6e3635f3779b15))
+* add delonghi CLI alongside the MCP server ([1aca417](https://github.com/synthe102/delonghi-mcp/commit/1aca4177302c8583abae4e42f17973be6c47ec12))
+
+
+### Bug Fixes
+
+* **cli:** narrow _run coro param from Awaitable to Coroutine ([122ea5e](https://github.com/synthe102/delonghi-mcp/commit/122ea5ec8d2658299b393c775ec8edcf12bea889))
+
 ## [0.5.0](https://github.com/synthe102/delonghi-mcp/compare/v0.4.0...v0.5.0) (2026-04-19)
 
 
