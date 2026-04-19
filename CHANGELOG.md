@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/synthe102/delonghi-mcp/compare/v0.4.0...v0.5.0) (2026-04-19)
+
+
+### Features
+
+* bake in Ayla app credentials as defaults ([a5c4b34](https://github.com/synthe102/delonghi-mcp/commit/a5c4b349a0e155d6b7c6702ff4f5f0bf8a5f1a13))
+
+
+### Documentation
+
+* update protocol.md with TV pair encoding, power-on command, and extended recipe IDs ([5d58dc3](https://github.com/synthe102/delonghi-mcp/commit/5d58dc3382526be55c0beb3d90da9fb539afb562))
+
 ## [0.4.0](https://github.com/synthe102/delonghi-mcp/compare/v0.3.1...v0.4.0) (2026-04-05)
 
 
