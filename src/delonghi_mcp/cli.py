@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Awaitable
-from typing import Annotated, TypeVar
+from collections.abc import Coroutine
+from typing import Annotated, Any, TypeVar
 
 import typer
 
@@ -44,7 +44,7 @@ JsonOption = Annotated[
 ]
 
 
-def _run(coro: Awaitable[T], json_output: bool = False) -> T:
+def _run(coro: Coroutine[Any, Any, T], json_output: bool = False) -> T:
     try:
         return asyncio.run(coro)
     except (DeLonghiMCPError, ValueError) as e:
