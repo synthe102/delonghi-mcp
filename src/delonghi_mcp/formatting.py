@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import dataclasses
+import json
 from typing import Any
+
+from pydantic import BaseModel
 
 from delonghi_mcp.api import BrewResult
 from delonghi_mcp.models import DeviceInfo, DeviceProperty
@@ -98,3 +102,52 @@ def format_beverages(beverages: dict[int, str]) -> str:
         lines.append(f"  {name} (ID 0x{recipe_id:02X})")
     lines.append(f"\n{len(beverages)} beverages ready to brew.")
     return "\n".join(lines)
+
+
+def _json_default(value: Any) -> Any:
+    if isinstance(value, bytes):
+        return value.hex()
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
+def _to_jsonable(obj: Any) -> Any:
+    if isinstance(obj, BaseModel):
+        return obj.model_dump(mode="json")
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        return {k: _to_jsonable(v) for k, v in dataclasses.asdict(obj).items()}
+    if isinstance(obj, dict):
+        return {k: _to_jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_to_jsonable(v) for v in obj]
+    return obj
+
+
+def beverages_to_json_payload(beverages: dict[int, str]) -> list[dict[str, Any]]:
+    """Convert ``{recipe_id: name}`` to JSON-friendly list of records."""
+    return [
+        {"recipe_id": rid, "recipe_id_hex": f"0x{rid:02X}", "name": name}
+        for rid, name in beverages.items()
+    ]
+
+
+def status_to_json_payload(
+    status: dict[str, DeviceProperty | None],
+) -> dict[str, Any]:
+    """Flatten status to ``{label: value_or_null}``."""
+    return {label: (prop.value if prop is not None else None) for label, prop in status.items()}
+
+
+def properties_to_json_payload(
+    props: list[DeviceProperty],
+) -> dict[str, dict[str, Any]]:
+    """Group properties into ``{"outputs": {name: value}, "inputs": {name: value}}``."""
+    outputs = {p.name: p.value for p in props if p.direction == "output"}
+    inputs = {p.name: p.value for p in props if p.direction == "input"}
+    return {"outputs": outputs, "inputs": inputs}
+
+
+def to_json(obj: Any) -> str:
+    """Serialize API return values to an indented JSON string."""
+    return json.dumps(
+        _to_jsonable(obj), indent=2, sort_keys=False, default=_json_default
+    )

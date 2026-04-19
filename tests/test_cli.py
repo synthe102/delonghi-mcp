@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -156,5 +157,80 @@ def test_delonghi_error_exits_nonzero(mock_api: MagicMock) -> None:
     mock_api.list_devices.side_effect = DeLonghiMCPError("Not authenticated")
     result = runner.invoke(app, ["devices"])
     assert result.exit_code == 1
-    assert "ERROR" in result.output
-    assert "Not authenticated" in result.output
+    assert "ERROR" in result.stderr
+    assert "Not authenticated" in result.stderr
+
+
+def test_devices_json(mock_api: MagicMock) -> None:
+    mock_api.list_devices.return_value = [
+        DeviceInfo(
+            dsn="AC000W123456",
+            device_id=42,
+            product_name="DeLonghi Eletta Explore",
+            model="ECAM550.65.S",
+            connection_status="Online",
+        )
+    ]
+    result = runner.invoke(app, ["devices", "--json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert isinstance(payload, list)
+    assert payload[0]["dsn"] == "AC000W123456"
+    assert payload[0]["product_name"] == "DeLonghi Eletta Explore"
+    assert payload[0]["connection_status"] == "Online"
+
+
+def test_beverages_json(mock_api: MagicMock) -> None:
+    mock_api.list_beverages.return_value = {0x01: "espresso", 0x07: "cappuccino"}
+    result = runner.invoke(app, ["beverages", "--json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert isinstance(payload, list)
+    assert payload == [
+        {"recipe_id": 1, "recipe_id_hex": "0x01", "name": "espresso"},
+        {"recipe_id": 7, "recipe_id_hex": "0x07", "name": "cappuccino"},
+    ]
+
+
+def test_error_json_emits_stderr_object(mock_api: MagicMock) -> None:
+    mock_api.list_devices.side_effect = DeLonghiMCPError("Not authenticated")
+    result = runner.invoke(app, ["devices", "--json"])
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    assert json.loads(result.stderr) == {"error": "Not authenticated"}
+
+
+def test_status_json_flattens_to_label_value(mock_api: MagicMock) -> None:
+    descaling_label = STATUS_PROPERTIES["d512_percentage_to_deca"]
+    mock_api.get_machine_status.return_value = {
+        "Machine Status": DeviceProperty(
+            name="app_device_status", value="RUN", direction="output"
+        ),
+        descaling_label: DeviceProperty(
+            name="d512_percentage_to_deca", value=42, direction="output"
+        ),
+        "Filter Usage (%)": None,
+    }
+    result = runner.invoke(app, ["status", "--json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "Machine Status": "RUN",
+        descaling_label: 42,
+        "Filter Usage (%)": None,
+    }
+
+
+def test_properties_json_groups_by_direction(mock_api: MagicMock) -> None:
+    mock_api.get_all_properties.return_value = [
+        DeviceProperty(name="app_device_status", value="RUN", direction="output"),
+        DeviceProperty(name="d510_ground_cnt_percentage", value=71, direction="output"),
+        DeviceProperty(name="app_data_request", value="", direction="input"),
+    ]
+    result = runner.invoke(app, ["properties", "--json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "outputs": {"app_device_status": "RUN", "d510_ground_cnt_percentage": 71},
+        "inputs": {"app_data_request": ""},
+    }
