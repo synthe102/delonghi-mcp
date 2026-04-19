@@ -172,6 +172,22 @@ Then use `delonghi-mcp` as the command in your MCP config:
 uv run mcp dev src/delonghi_mcp/server.py
 ```
 
+### CLI
+
+A `delonghi` console script is installed alongside the MCP server. It reads the same `.env` / environment variables and reuses the persisted Ayla refresh token, so it works out of the box once `delonghi-mcp` is configured.
+
+```bash
+uv run delonghi --help                     # list commands
+uv run delonghi devices                    # discover machines
+uv run delonghi status                     # quick status overview
+uv run delonghi beverages                  # list stored recipes
+uv run delonghi power-on                   # wake from standby
+uv run delonghi brew espresso --intensity 4
+uv run delonghi brew cappuccino --coffee-ml 60 --milk-ml 120
+```
+
+All commands accept `--dsn` to target a specific device when multiple machines are on the account; with a single device it is auto-selected.
+
 ## Tools
 
 | Tool | Description |

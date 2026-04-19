@@ -9,7 +9,14 @@ from mcp.server.fastmcp import Context, FastMCP
 
 from delonghi_mcp.api import DeLonghiAPI
 from delonghi_mcp.exceptions import DeLonghiMCPError
-from delonghi_mcp.protocol import STATUS_PROPERTIES
+from delonghi_mcp.formatting import (
+    format_beverages,
+    format_brew_result,
+    format_devices,
+    format_power_on,
+    format_properties,
+    format_status,
+)
 
 
 @asynccontextmanager
@@ -23,11 +30,6 @@ mcp = FastMCP("delonghi-coffee", lifespan=lifespan)
 
 def _get_api(ctx: Context) -> DeLonghiAPI:
     return ctx.request_context.lifespan_context
-
-
-def _truncate(value: object, max_len: int = 80) -> str:
-    s = repr(value)
-    return s if len(s) < max_len else s[: max_len - 3] + "..."
 
 
 # ---------------------------------------------------------------------------
@@ -47,28 +49,7 @@ async def list_devices(ctx: Context) -> str:
         devices = await api.list_devices()
     except DeLonghiMCPError as e:
         return f"ERROR: {e}"
-
-    if not devices:
-        return "No devices found on this account."
-
-    lines = [f"Found {len(devices)} device(s):\n"]
-    for d in devices:
-        lines.append(f"  DSN: {d.dsn}")
-        lines.append(f"  Product: {d.product_name}")
-        lines.append(f"  Model: {d.model}")
-        if d.oem_model:
-            lines.append(f"  OEM Model: {d.oem_model}")
-        lines.append(f"  Status: {d.connection_status}")
-        if d.lan_ip:
-            lines.append(f"  LAN IP: {d.lan_ip}")
-        if d.connected_at:
-            lines.append(f"  Last connected: {d.connected_at}")
-        lines.append("")
-
-    if len(devices) == 1:
-        lines.append(f"Auto-selected device: {devices[0].dsn}")
-
-    return "\n".join(lines)
+    return format_devices(devices)
 
 
 # ---------------------------------------------------------------------------
@@ -87,9 +68,9 @@ async def power_on(ctx: Context, dsn: str | None = None) -> str:
     api = _get_api(ctx)
     try:
         result = await api.power_on(dsn)
-        return f"Power-on command sent.\nResponse: {result}"
     except DeLonghiMCPError as e:
         return f"ERROR: {e}"
+    return format_power_on(result)
 
 
 # ---------------------------------------------------------------------------
@@ -109,25 +90,7 @@ async def machine_status(ctx: Context, dsn: str | None = None) -> str:
         status = await api.get_machine_status(dsn)
     except DeLonghiMCPError as e:
         return f"ERROR: {e}"
-
-    lines = ["Machine Status:\n"]
-    for label, prop in status.items():
-        if prop is None:
-            lines.append(f"  {label}: (unavailable)")
-        elif label == STATUS_PROPERTIES.get("d512_percentage_to_deca") and isinstance(
-            prop.value, int
-        ):
-            if prop.value > 100:
-                lines.append(
-                    f"  {label}: {prop.value}% — DESCALING OVERDUE "
-                    f"({prop.value - 100}% past threshold)"
-                )
-            else:
-                lines.append(f"  {label}: {prop.value}%")
-        else:
-            lines.append(f"  {label}: {prop.value}")
-
-    return "\n".join(lines)
+    return format_status(status)
 
 
 # ---------------------------------------------------------------------------
@@ -147,28 +110,7 @@ async def get_all_properties(ctx: Context, dsn: str | None = None) -> str:
         props = await api.get_all_properties(dsn)
     except DeLonghiMCPError as e:
         return f"ERROR: {e}"
-
-    if not props:
-        return "No properties found on this device."
-
-    inputs = [p for p in props if p.direction == "input"]
-    outputs = [p for p in props if p.direction == "output"]
-
-    lines = [f"Device properties ({len(props)} total):\n"]
-
-    if outputs:
-        lines.append(f"--- Status properties (readable, {len(outputs)}) ---")
-        for p in outputs:
-            lines.append(f"  {p.name} = {_truncate(p.value)}  [{p.type}]")
-        lines.append("")
-
-    if inputs:
-        lines.append(f"--- Command properties (writable, {len(inputs)}) ---")
-        for p in inputs:
-            lines.append(f"  {p.name} = {_truncate(p.value)}  [{p.type}]")
-        lines.append("")
-
-    return "\n".join(lines)
+    return format_properties(props)
 
 
 # ---------------------------------------------------------------------------
@@ -211,14 +153,11 @@ async def brew_coffee(
             water_quantity_ml=water_quantity_ml,
             intensity=intensity,
         )
-        return (
-            f"Brewing {result.beverage_name}!\n"
-            f"Command sent successfully.\nResponse: {result.response}"
-        )
     except ValueError as e:
         return f"ERROR: {e}"
     except DeLonghiMCPError as e:
         return f"ERROR brewing: {e}"
+    return format_brew_result(result)
 
 
 # ---------------------------------------------------------------------------
@@ -237,10 +176,4 @@ async def list_beverages(ctx: Context) -> str:
         beverages = await api.list_beverages()
     except DeLonghiMCPError as e:
         return f"ERROR fetching recipes: {e}"
-
-    lines = ["Available beverages:\n"]
-    for recipe_id, name in beverages.items():
-        lines.append(f"  {name} (ID 0x{recipe_id:02X})")
-
-    lines.append(f"\n{len(beverages)} beverages ready to brew.")
-    return "\n".join(lines)
+    return format_beverages(beverages)

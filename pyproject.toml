@@ -12,10 +12,12 @@ dependencies = [
     "httpx>=0.27.0",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
+    "typer>=0.12",
 ]
 
 [project.scripts]
 delonghi-mcp = "delonghi_mcp.__main__:main"
+delonghi = "delonghi_mcp.cli:app"
 
 [build-system]
 requires = ["uv_build>=0.11.3,<0.12.0"]
