@@ -9,7 +9,6 @@ An [MCP](https://modelcontextprotocol.io/) server for controlling a De'Longhi El
 - Python 3.13+
 - [uv](https://docs.astral.sh/uv/) or [Nix](https://nixos.org/)
 - A De'Longhi Coffee Link account (same credentials you use in the app)
-- The `app_id` and `app_secret` extracted from the Coffee Link app (see [reverse-engineering guide](docs/reverse-engineering-guide.md))
 
 ### Install
 
@@ -33,42 +32,27 @@ nix run        # Run the MCP server directly
 
 ### Configure
 
-Copy the example env file and fill in your credentials:
+Copy the example env file and fill in your De'Longhi Coffee Link email and password:
 
 ```bash
 cp .env.example .env
 ```
 
-At minimum you need the Ayla app credentials in `.env`:
-
 ```env
-DELONGHI_AYLA_APP_ID=your-app-id
-DELONGHI_AYLA_APP_SECRET=your-app-secret
+DELONGHI_EMAIL=you@example.com
+DELONGHI_PASSWORD=your-password
 ```
 
-These are extracted from the Coffee Link app — see [docs/reverse-engineering-guide.md](docs/reverse-engineering-guide.md).
-
-#### Authentication
-
-The server supports three authentication methods, tried in this order:
-
-1. **Persisted refresh token** (automatic) — After a successful login, the server saves a refresh token to `.ayla_token.json`. On subsequent launches, it uses this token automatically. No manual intervention needed until the token expires.
-
-2. **Email/password** — Your De'Longhi Coffee Link account credentials. Set `DELONGHI_EMAIL` and `DELONGHI_PASSWORD` in `.env`. The server authenticates via Gigya (the same SSO provider the Coffee Link app uses) to obtain a JWT, then exchanges it for Ayla tokens.
-
-3. **SSO token** — A Gigya JWT captured from the Coffee Link app's `token_sign_in` request via MITM proxy. Set `DELONGHI_AYLA_SSO_TOKEN` in `.env`. This is a fallback for cases where email/password auth doesn't work.
-
-In practice: provide `app_id` + `app_secret` and your email/password for the first login. After that, the persisted refresh token handles re-authentication automatically.
-
+That's all you need. The server authenticates via Gigya (the same SSO provider the Coffee Link app uses) to obtain a JWT, exchanges it for Ayla tokens, and persists a refresh token to `.ayla_token.json` so subsequent launches skip the login round-trip.
 
 #### Environment variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DELONGHI_AYLA_APP_ID` | Yes | Ayla application ID (extracted from Coffee Link app) |
-| `DELONGHI_AYLA_APP_SECRET` | Yes | Ayla application secret |
-| `DELONGHI_EMAIL` | No | De'Longhi Coffee Link account email (recommended for initial login) |
-| `DELONGHI_PASSWORD` | No | De'Longhi Coffee Link account password |
+| `DELONGHI_EMAIL` | Yes | De'Longhi Coffee Link account email |
+| `DELONGHI_PASSWORD` | Yes | De'Longhi Coffee Link account password |
+| `DELONGHI_AYLA_APP_ID` | No | Ayla application ID (defaults to the value extracted from Coffee Link app) |
+| `DELONGHI_AYLA_APP_SECRET` | No | Ayla application secret (defaults to the value extracted from Coffee Link app) |
 | `DELONGHI_AYLA_SSO_TOKEN` | No | Gigya JWT for SSO auth (fallback, captured via MITM proxy) |
 | `DELONGHI_AYLA_AUTH_BASE_URL` | No | Auth endpoint (default: EU — `https://user-field-eu.aylanetworks.com`) |
 | `DELONGHI_AYLA_ADS_BASE_URL` | No | Device API endpoint (default: EU — `https://ads-eu.aylanetworks.com`) |
@@ -84,17 +68,13 @@ Add to your Claude Code MCP settings (`~/.claude.json` or project `.mcp.json`):
   "mcpServers": {
     "delonghi": {
       "command": "uv",
-      "args": ["--directory", "/path/to/delonghi-mcp", "run", "delonghi-mcp"],
-      "env": {
-        "DELONGHI_AYLA_APP_ID": "your-app-id",
-        "DELONGHI_AYLA_APP_SECRET": "your-app-secret"
-      }
+      "args": ["--directory", "/path/to/delonghi-mcp", "run", "delonghi-mcp"]
     }
   }
 }
 ```
 
-Email/password and SSO token can go in the project's `.env` file instead of the MCP config. Once authenticated, the server persists a refresh token so only `app_id` and `app_secret` are needed in the MCP config long-term.
+Put your email and password in the project's `.env` file. Once authenticated, the server persists a refresh token — subsequent launches reuse it until it expires.
 
 ### With Claude Desktop
 
@@ -105,11 +85,7 @@ Add to your Claude Desktop config (`claude_desktop_config.json`):
   "mcpServers": {
     "delonghi": {
       "command": "uv",
-      "args": ["--directory", "/path/to/delonghi-mcp", "run", "delonghi-mcp"],
-      "env": {
-        "DELONGHI_AYLA_APP_ID": "your-app-id",
-        "DELONGHI_AYLA_APP_SECRET": "your-app-secret"
-      }
+      "args": ["--directory", "/path/to/delonghi-mcp", "run", "delonghi-mcp"]
     }
   }
 }
@@ -136,11 +112,7 @@ For Claude Code / Claude Desktop, point the MCP config at the flake output:
   "mcpServers": {
     "delonghi": {
       "command": "nix",
-      "args": ["run", "github:synthe102/delonghi-mcp"],
-      "env": {
-        "DELONGHI_AYLA_APP_ID": "your-app-id",
-        "DELONGHI_AYLA_APP_SECRET": "your-app-secret"
-      }
+      "args": ["run", "github:synthe102/delonghi-mcp"]
     }
   }
 }
@@ -188,11 +160,7 @@ Then use `delonghi-mcp` as the command in your MCP config:
 {
   "mcpServers": {
     "delonghi": {
-      "command": "delonghi-mcp",
-      "env": {
-        "DELONGHI_AYLA_APP_ID": "your-app-id",
-        "DELONGHI_AYLA_APP_SECRET": "your-app-secret"
-      }
+      "command": "delonghi-mcp"
     }
   }
 }
@@ -281,4 +249,4 @@ Tests use `respx` to mock `httpx` requests. The `ayla_client` fixture in `confte
 
 ## Reverse Engineering
 
-The Ayla `app_id`, `app_secret`, and device property names are not publicly documented. See [docs/reverse-engineering-guide.md](docs/reverse-engineering-guide.md) for instructions on extracting them from the Coffee Link app.
+The Ayla `app_id`, `app_secret`, and device property names are not publicly documented. The defaults baked into `config.py` were extracted from the Coffee Link app — see [docs/reverse-engineering-guide.md](docs/reverse-engineering-guide.md) for how.

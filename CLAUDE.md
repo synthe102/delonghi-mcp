@@ -39,7 +39,7 @@ This is an MCP server that controls a De'Longhi Eletta Explore coffee maker thro
 
 - **`server.py`** — Thin FastMCP wrapper over `DeLonghiAPI`. Each tool delegates to the API and formats the result as text. The lifespan creates a `DeLonghiAPI` context manager. Before brewing, the API runs the 3-step connection flow: handshake (`app_device_connected`) -> init command (0xE8F0) -> brew command (0x83F0). Skipping the handshake causes the machine to acknowledge but not execute commands.
 
-- **`config.py`** — Pydantic-settings loading credentials from env vars prefixed `DELONGHI_`.
+- **`config.py`** — Pydantic-settings loading credentials from env vars prefixed `DELONGHI_`. `ayla_app_id` and `ayla_app_secret` ship with defaults extracted from the Coffee Link app, so users only need to supply `DELONGHI_EMAIL` and `DELONGHI_PASSWORD`.
 
 ### Binary protocol essentials
 

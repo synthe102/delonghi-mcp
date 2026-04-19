@@ -13,8 +13,8 @@ class AylaSettings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
-    ayla_app_id: str = ""
-    ayla_app_secret: str = ""
+    ayla_app_id: str = "DLonghiCoffeeIdKit-sQ-id"
+    ayla_app_secret: str = "DLonghiCoffeeIdKit-HT6b0VNd4y6CSha9ivM5k8navLw"
     ayla_auth_base_url: str = "https://user-field-eu.aylanetworks.com"
     ayla_ads_base_url: str = "https://ads-eu.aylanetworks.com"
 
