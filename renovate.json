@@ -1,6 +1,14 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    ":pinDependencies"
+  ],
+  "packageRules": [
+    {
+      "description": "Pin Python dependencies (pyproject.toml) to exact versions",
+      "matchManagers": ["pep621"],
+      "rangeStrategy": "pin"
+    }
   ]
 }
